@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="tsilva-notebook-utils",
-    version="0.1.0",
+    version="0.1.6",
     packages=find_packages(),
     install_requires=[
         "ipython>=7.0.0",

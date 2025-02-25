@@ -1,7 +1,6 @@
 import cv2
 import base64
 import imageio
-import numpy as np
 from io import BytesIO
 from IPython.display import HTML
 
@@ -24,7 +23,6 @@ def render_video(
     font_color = (0, 0, 0)  # Black
     line_type = 1
     margin = 10
-    line_spacing = 20
 
     processed_frames = []
     for i, frame in enumerate(frames):
