@@ -1,9 +1,3 @@
-import cv2
-import base64
-import imageio
-from io import BytesIO
-from IPython.display import HTML
-
 def render_video(
     frames,              # List of frames to render. Each frame can be an image or a tuple (image, label)
     scale=1,             # Scale factor for the video dimensions
@@ -11,6 +5,12 @@ def render_video(
     format='mp4',        # Video format
     font_scale=0.5       # Font scale for text shown in video corner
 ):
+    import cv2
+    import base64
+    import imageio
+    from io import BytesIO
+    from IPython.display import HTML
+
     def adjust_frame_size(frame, block_size=16):
         """Resize frame dimensions to be divisible by block_size."""
         height, width = frame.shape[:2]
@@ -69,6 +69,8 @@ def render_video(
     ''')
 
 def render_videos(video_tuples, **kwargs):
+    from IPython.display import HTML
+
     videos_frames = [x[0] for x in video_tuples] # Extract video frame lists from tuples
     videos = [x if isinstance(x, HTML) else render_video(x, **kwargs) for x in videos_frames] # Render videos if necessary
     labels = [x[1] for x in video_tuples] # Extract labels from tuples
