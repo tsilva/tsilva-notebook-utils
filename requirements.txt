@@ -8,3 +8,4 @@ numpy>=1.19.0
 twine>=4.0.0
 build>=0.10.0
 wheel>=0.40.0
+python-dotenv>=0.20.0
