@@ -3,6 +3,8 @@ ipython>=7.0.0
 opencv-python>=4.0.0
 imageio>=2.0.0
 numpy>=1.19.0
+tqdm>=4.0.0
+google-colab>=1.0.0
 
 # Development dependencies
 twine>=4.0.0
