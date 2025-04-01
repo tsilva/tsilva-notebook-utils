@@ -1,0 +1,10 @@
+# Runtime dependencies
+ipython>=7.0.0
+opencv-python>=4.0.0
+imageio>=2.0.0
+numpy>=1.19.0
+
+# Development dependencies
+twine>=4.0.0
+build>=0.10.0
+wheel>=0.40.0
