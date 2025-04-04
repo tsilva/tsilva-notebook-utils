@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tsilva_notebook_utils"
+version = "0.0.1"
+description = "Utility functions for Jupyter/Colab notebooks"
+authors = [
+    {name = "Tiago Silva"},
+]
+readme = "README.md"
+requires-python = ">=3.6"
+dependencies = [
+    "ipython>=7.0.0",
+    "opencv-python>=4.0.0",
+    "imageio>=2.0.0",
+    "numpy>=1.19.0",
+    "tqdm>=4.0.0",
+    "google-colab>=1.0.0"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["tsilva_notebook_utils"]
+
+[tool.hatch.envs.default]
+dependencies = [
+    "pytest",
+]
+
+[tool.hatch.publish.index]
+repo = "pypi"
