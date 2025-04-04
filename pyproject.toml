@@ -18,7 +18,8 @@ dependencies = [
     "numpy>=1.19.0",
     "tqdm>=4.0.0",
     "google-colab>=1.0.0",
-    "huggingface_hub"
+    "huggingface_hub",
+    "pynvml"
 ]
 
 [tool.hatch.build.targets.wheel]
