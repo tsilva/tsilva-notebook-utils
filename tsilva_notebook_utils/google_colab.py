@@ -1,4 +1,4 @@
-def disconnect_google_colab_after_timeout(timeout_seconds=300):    
+def disconnect_after_timeout(timeout_seconds=300):    
     import time
     from google.colab import runtime
     from tqdm import tqdm
