@@ -7,7 +7,7 @@ name = "tsilva_notebook_utils"
 version = "0.0.2"
 description = "Utility functions for Jupyter/Colab notebooks"
 authors = [
-    {name = "Tiago Silva"},
+    {name = "Tiago Silva"}
 ]
 readme = "README.md"
 requires-python = ">=3.6"
@@ -17,7 +17,7 @@ dependencies = [
     "imageio>=2.0.0",
     "numpy>=1.19.0",
     "tqdm>=4.0.0",
-    "google-colab>=1.0.0"
+    "google-colab>=1.0.0",
     "huggingface_hub"
 ]
 
