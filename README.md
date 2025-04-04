@@ -6,18 +6,6 @@
 
 `tsilva-notebook-utils` is a collection of utility functions designed to make working with Jupyter and Google Colab notebooks more efficient. It provides tools for video rendering, notification systems, and Colab-specific features like automatic disconnection after idle periods.
 
-## 🚀 Installation
-
-```bash
-pipx install . --force
-```
-
-Or install from PyPI:
-
-```bash
-pip install tsilva_notebook_utils
-```
-
 ## 🛠️ Usage
 
 ### Video Rendering
