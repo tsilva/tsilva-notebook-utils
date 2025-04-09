@@ -103,7 +103,6 @@ def plot_gradients_over_time_steps(
     title='Gradients over Time Steps'
 ):
     import numpy as np
-    from tsilva_notebook_utils import plot_series
 
     # Determine total epochs
     total_epochs = len(gradients_over_time[key])
