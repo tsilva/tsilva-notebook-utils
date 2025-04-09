@@ -78,58 +78,49 @@ def plot_training_loss(data):
         ylabel="Loss"
     )
 
-def plot_gradients_over_epochs(
-    gradients_dict, 
-    title='Gradient Norms over Epochs'
+def plot_series_over_indices(
+    data_map, 
+    title='Series over Indices',
+    xlabel='Index',
+    ylabel='Value'
 ):
     import numpy as np
 
-    # Stack the gradients
-    gradients_array = np.vstack(list(gradients_dict.values())).T
-    labels = list(gradients_dict.keys())
+    # Stack the data from the map into a 2D array (shape: indices x series)
+    data_array = np.vstack(list(data_map.values())).T
+    labels = list(data_map.keys())
 
-    # Plot
     return plot_series(
-        gradients_array,
+        data_array,
         labels=labels,
         title=title,
-        xlabel='Epoch',
-        ylabel='Gradient Norm'
+        xlabel=xlabel,
+        ylabel=ylabel
     )
 
-def plot_gradients_over_time_steps(
-    gradients_over_time, 
+def plot_snapshots_over_indices(
+    data, 
     key, 
-    title='Gradients over Time Steps'
+    title='Snapshots over Indices',
+    xlabel='Index',
+    ylabel='Value',
+    serieslabel='Series',
+    num_snapshots=5
 ):
     import numpy as np
 
-    # Determine total epochs
-    total_epochs = len(gradients_over_time[key])
+    total_indices = len(data[key])
+    snapshot_indices = np.linspace(0, total_indices - 1, num=num_snapshots, dtype=int)
 
-    # Define representative epochs to plot
-    epochs_to_plot = [
-        0,
-        max(1, total_epochs // 4),
-        max(1, total_epochs // 2),
-        max(1, (3 * total_epochs) // 4),
-        total_epochs - 1
-    ]
+    # Collect data at snapshot indices
+    snapshots = [data[key][i] for i in snapshot_indices]
+    data_array = np.array(snapshots).T
+    labels = [f'{serieslabel} {i}' for i in snapshot_indices]
 
-    # Collect gradient norms for selected epochs
-    gradients_list = [gradients_over_time[key][epoch] for epoch in epochs_to_plot]
-
-    # Convert to NumPy array with shape (time_steps, n_series)
-    gradients_array = np.array(gradients_list).T
-
-    # Create labels for the series
-    labels = [f'Epoch {epoch}' for epoch in epochs_to_plot]
-
-    # Plot using the reusable function
     return plot_series(
-        gradients_array,
+        data_array,
         labels=labels,
         title=title,
-        xlabel='Time step',
-        ylabel='Gradient Norm'
+        xlabel=xlabel,
+        ylabel=ylabel
     )
