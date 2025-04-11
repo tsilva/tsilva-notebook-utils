@@ -52,3 +52,20 @@ def load_secrets_into_env(keys):
 
         # Set the secret in the environment
         os.environ[key] = value
+
+def notebook_id_from_title():
+    import re
+    import unicodedata
+    from google.colab import _message
+
+    def _slugify(value):
+        value = str(value)
+        value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+        value = re.sub(r'[^a-zA-Z0-9]+', '-', value)
+        value = value.strip('-')
+        return value.lower()
+        
+    metadata = _message.blocking_request('get_ipynb')
+    text = metadata['ipynb']['cells'][0]['source'][0]
+    slug = _slugify(text)
+    return slug
