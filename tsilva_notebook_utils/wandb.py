@@ -5,13 +5,12 @@ def init_with_defaults(config):
 
     NOTEBOOK_ID = os.getenv("NOTEBOOK_ID"); assert NOTEBOOK_ID is not None, "NOTEBOOK_ID environment variable is not set"
     WANDB_API_KEY = os.getenv("WANDB_API_KEY"); assert WANDB_API_KEY is not None, "WANDB_API_KEY environment variable is not set"
-    notebook_id = config.get("notebook_id"); assert notebook_id is not None, "notebook_id key is not set in config"
 
     # Login to W&B
-    login(WANDB_API_KEY, notebook_id)
+    login(WANDB_API_KEY, NOTEBOOK_ID)
 
     # Initialize a W&B run for training
-    return wandb.init(project=notebook_id, config=config)
+    return wandb.init(project=NOTEBOOK_ID, config=config)
 
 def login(api_key: str, project_id: str) -> str:
     import wandb
