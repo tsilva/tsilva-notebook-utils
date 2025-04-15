@@ -79,3 +79,65 @@ def apply_weight_init(model, weight_init, nonlinearity):
             nn.init.zeros_(param)
 
     return model
+
+
+def calc_grad_norm(model):
+    """
+    Calculates the total L2 norm of gradients across all parameters in the model,
+    as well as the individual gradient norms for each parameter.
+
+    Args:
+        model (torch.nn.Module): The model containing parameters with gradients.
+
+    Returns:
+        total_norm (float): The total L2 norm of all parameter gradients.
+        layer_norms (dict): A dictionary mapping parameter names to their individual L2 gradient norms.
+    """
+    total_norm_sq = 0  # Initialize the sum of squared norms
+    layer_norms = {}   # Dictionary to store the norm of each parameter's gradient
+
+    # Iterate over all named parameters in the model
+    for name, param in model.named_parameters():
+        if param.grad is not None:
+            # Compute the L2 norm (Euclidean norm) of the gradient
+            param_norm = param.grad.data.norm(2).item()
+            total_norm_sq += param_norm ** 2  # Accumulate the squared norm
+            layer_norms[name] = param_norm   # Store the individual norm
+
+    # Compute the total norm as the square root of the sum of squared norms
+    total_norm = total_norm_sq ** 0.5
+    return total_norm, layer_norms
+
+
+def get_model_parameter_counts(model):
+    """
+    Returns a dictionary with total, trainable, and non-trainable parameter counts in a PyTorch model.
+
+    Args:
+        model (torch.nn.Module): The PyTorch model.
+
+    Returns:
+        dict: Dictionary containing counts of parameters.
+            {
+                'total': int,
+                'trainable': int,
+                'non_trainable': int
+            }
+    """
+    total = 0
+    trainable = 0
+    non_trainable = 0
+
+    for p in model.parameters():
+        param_count = p.numel()
+        total += param_count
+        if p.requires_grad:
+            trainable += param_count
+        else:
+            non_trainable += param_count
+
+    return {
+        'total': total,
+        'trainable': trainable,
+        'non_trainable': non_trainable
+    }
