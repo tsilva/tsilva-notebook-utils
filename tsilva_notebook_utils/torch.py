@@ -81,7 +81,7 @@ def apply_weight_init(model, weight_init, nonlinearity):
     return model
 
 
-def calc_layer_grad_norms(model):
+def calc_model_layer_grad_norms(model):
     """
     Calculates the L2 norm of gradients for each parameter in the model.
 
@@ -98,7 +98,7 @@ def calc_layer_grad_norms(model):
     return layer_norms
 
 
-def calc_total_grad_norm(model, layer_norms=None):
+def calc_model_total_grad_norm(model, layer_norms=None):
     """
     Calculates the total L2 norm of gradients across all parameters in the model,
     using the individual parameter norms.
@@ -112,11 +112,22 @@ def calc_total_grad_norm(model, layer_norms=None):
         total_norm (float): The total L2 norm of all parameter gradients.
         layer_norms (dict): A dictionary mapping parameter names to their individual L2 gradient norms.
     """
-    layer_norms = layer_norms if layer_norms else calc_layer_grad_norms(model)
+    layer_norms = layer_norms if layer_norms else calc_model_layer_grad_norms(model)
     total_norm_sq = sum(norm ** 2 for norm in layer_norms.values())
     total_norm = total_norm_sq ** 0.5
-    return total_norm, layer_norms
+    return total_norm
 
+def calc_model_grad_norms(model):
+    """
+    Calculates the L2 norm of gradients for each parameter in the model and the total L2 norm.
+    Args:
+        model (torch.nn.Module): The model containing parameters with gradients.
+    Returns:
+        total_norm (float): The total L2 norm of all parameter gradients.
+        layer_norms (dict): A dictionary mapping parameter names to their individual L2 gradient norms.
+    """
+    layer_norms = calc_model_layer_grad_norms(model)
+    return calc_model_total_grad_norm(model, layer_norms=layer_norms)
 
 def get_model_parameter_counts(model):
     """
