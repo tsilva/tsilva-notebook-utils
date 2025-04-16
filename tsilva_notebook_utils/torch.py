@@ -81,30 +81,39 @@ def apply_weight_init(model, weight_init, nonlinearity):
     return model
 
 
-def calc_grad_norm(model):
+def calc_layer_grad_norms(model):
     """
-    Calculates the total L2 norm of gradients across all parameters in the model,
-    as well as the individual gradient norms for each parameter.
+    Calculates the L2 norm of gradients for each parameter in the model.
 
     Args:
         model (torch.nn.Module): The model containing parameters with gradients.
 
     Returns:
+        layer_norms (dict): A dictionary mapping parameter names to their individual L2 gradient norms.
+    """
+    layer_norms = {}
+    for name, param in model.named_parameters():
+        if param.grad is not None:
+            layer_norms[name] = param.grad.data.norm(2).item()
+    return layer_norms
+
+
+def calc_total_grad_norm(model, layer_norms=None):
+    """
+    Calculates the total L2 norm of gradients across all parameters in the model,
+    using the individual parameter norms.
+
+    Args:
+        model (torch.nn.Module): The model containing parameters with gradients.
+        layer_norms (dict, optional): A dictionary mapping parameter names to their individual L2 gradient norms.
+            If provided, this will be used instead of calculating them again.
+
+    Returns:
         total_norm (float): The total L2 norm of all parameter gradients.
         layer_norms (dict): A dictionary mapping parameter names to their individual L2 gradient norms.
     """
-    total_norm_sq = 0  # Initialize the sum of squared norms
-    layer_norms = {}   # Dictionary to store the norm of each parameter's gradient
-
-    # Iterate over all named parameters in the model
-    for name, param in model.named_parameters():
-        if param.grad is not None:
-            # Compute the L2 norm (Euclidean norm) of the gradient
-            param_norm = param.grad.data.norm(2).item()
-            total_norm_sq += param_norm ** 2  # Accumulate the squared norm
-            layer_norms[name] = param_norm   # Store the individual norm
-
-    # Compute the total norm as the square root of the sum of squared norms
+    layer_norms = layer_norms if layer_norms else calc_layer_grad_norms(model)
+    total_norm_sq = sum(norm ** 2 for norm in layer_norms.values())
     total_norm = total_norm_sq ** 0.5
     return total_norm, layer_norms
 
