@@ -127,7 +127,8 @@ def calc_model_grad_norms(model):
         layer_norms (dict): A dictionary mapping parameter names to their individual L2 gradient norms.
     """
     layer_norms = calc_model_layer_grad_norms(model)
-    return calc_model_total_grad_norm(model, layer_norms=layer_norms)
+    total_norm = calc_model_total_grad_norm(model, layer_norms)
+    return total_norm, layer_norms
 
 def get_model_parameter_counts(model):
     """
