@@ -83,3 +83,104 @@ def render_videos(video_tuples, **kwargs):
         {label_row}
     </table>
     """)
+
+def render_video_from_dir(
+    directory_path,      
+    scale=1,             
+    fps=30,              
+    format='mp4'       
+):
+    import os
+    import re
+    import cv2
+    import base64
+    import tempfile
+    from IPython.display import HTML
+    import imageio_ffmpeg as ffmpeg
+
+    def get_numeric_sort_key(filename):
+        return int(re.search(r'\d+', os.path.splitext(filename)[0]).group())
+
+    def adjust_frame_size(frame, block_size=16):
+        h, w = frame.shape[:2]
+        new_h = ((h + block_size - 1) // block_size) * block_size
+        new_w = ((w + block_size - 1) // block_size) * block_size
+        return cv2.resize(frame, (new_w, new_h))
+
+    # Collect and sort image files
+    image_files = sorted([
+        f for f in os.listdir(directory_path)
+        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+    ], key=get_numeric_sort_key)
+
+    if not image_files:
+        raise ValueError("No image files found in the directory.")
+
+    first_frame = cv2.imread(os.path.join(directory_path, image_files[0]))
+    if first_frame is None:
+        raise ValueError("First image couldn't be read.")
+    
+    first_frame = adjust_frame_size(first_frame)
+    height, width = first_frame.shape[:2]
+    scaled_width, scaled_height = int(width * scale), int(height * scale)
+
+    with tempfile.NamedTemporaryFile(suffix=f".{format}", delete=False) as tmpfile:
+        output_path = tmpfile.name
+
+    # --- Correct way to use the generator ---
+    writer = ffmpeg.write_frames(
+        output_path,
+        size=(width, height),
+        fps=fps,
+        codec='libx264'
+    )
+    next(writer)  # Start the generator
+
+    try:
+        for fname in image_files:
+            img_path = os.path.join(directory_path, fname)
+            frame = cv2.imread(img_path)
+            #if frame is None: continue
+            frame = adjust_frame_size(frame)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            writer.send(frame.tobytes())
+    finally:
+        try:
+            writer.close()
+        except StopIteration:
+            pass
+
+    # Read video and encode to base64
+    with open(output_path, "rb") as f:
+        video_data = base64.b64encode(f.read()).decode()
+
+    os.remove(output_path)
+
+    return HTML(f'''
+        <video width="{scaled_width}" height="{scaled_height}" controls autoplay loop muted>
+            <source src="data:video/{format};base64,{video_data}" type="video/{format}">
+            Your browser does not support the video tag.
+        </video>
+    ''')
+
+def save_frames_to_dir(iterator, output_dir, ext="jpg", frame_offset=0, show_progress=True):
+    import os
+    import torch
+    from torchvision.transforms import ToPILImage
+    from tqdm import tqdm
+
+    """
+    Dumps tensors from an iterator to numbered image files in the given directory.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    to_pil = ToPILImage()
+
+    if show_progress: iterator = tqdm(iterator, desc="Saving frames")
+
+    for i, frame in enumerate(iterator):
+        if isinstance(frame, torch.Tensor):
+            frame = to_pil(frame)
+        frame_id = frame_offset + i
+        filename = os.path.join(output_dir, f"{frame_id}.{ext}")
+        frame.save(filename)
