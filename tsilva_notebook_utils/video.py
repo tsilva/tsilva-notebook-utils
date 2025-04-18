@@ -68,6 +68,7 @@ def render_video(
         </video>
     ''')
 
+
 def render_videos(video_tuples, **kwargs):
     from IPython.display import HTML
 
@@ -83,6 +84,7 @@ def render_videos(video_tuples, **kwargs):
         {label_row}
     </table>
     """)
+
 
 def render_video_from_dir(
     directory_path,      
@@ -163,6 +165,7 @@ def render_video_from_dir(
         </video>
     ''')
 
+
 def save_frames_to_dir(iterator, output_dir, ext="jpg", frame_offset=0, show_progress=True):
     import os
     import torch
@@ -184,3 +187,81 @@ def save_frames_to_dir(iterator, output_dir, ext="jpg", frame_offset=0, show_pro
         frame_id = frame_offset + i
         filename = os.path.join(output_dir, f"{frame_id}.{ext}")
         frame.save(filename)
+
+
+def render_loader_video(loader, separator_width=10, separator_color=0):
+    import torch
+    import tempfile
+    from tqdm import tqdm
+
+    frame_offset = 0
+    with tempfile.TemporaryDirectory() as temp_dir:
+        for x, y in tqdm(loader, desc="Rendering frames"):
+            B, C, H, W = x.shape
+
+            # Create black separator bar
+            bar = torch.full((B, C, H, separator_width), fill_value=separator_color, device=x.device)
+
+            # Concatenate input | separator | target
+            side_by_side = torch.cat([x, bar, y], dim=3)  # Concatenate along width
+
+            image_tensors = side_by_side.cpu().unbind(0)  # Unbind to list of individual images
+
+            save_frames_to_dir(image_tensors, temp_dir, frame_offset=frame_offset, show_progress=False)
+            frame_offset += len(image_tensors)
+
+        video = render_video_from_dir(temp_dir)
+    return video
+
+
+def render_autoencoder_video(model, loader, compare_inputs=True, separator_width=10, separator_color=0):
+    """
+    Renders a video of model predictions. If compare_inputs is True, renders side-by-side input and output
+    with an optional separator bar.
+
+    Args:
+        model: PyTorch model.
+        loader: DataLoader returning (x, y) batches.
+        compare_inputs (bool): If True, shows input | separator | prediction.
+        separator_width (int): Width of vertical separator in pixels.
+        separator_color (float or Tensor): Value(s) for separator color. Use float for grayscale, Tensor of shape (C,) for RGB.
+    """
+
+    import torch
+    import tempfile
+    from tqdm import tqdm
+
+    model.eval()
+    device = next(model.parameters()).device
+    frame_offset = 0
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        for x, _ in tqdm(loader):
+            x = x.to(device)
+            with torch.no_grad():
+                y_pred = model(x)
+
+            if compare_inputs:
+                B, C, H, W = x.shape
+
+                # Create separator bar
+                if isinstance(separator_color, torch.Tensor):
+                    if separator_color.shape != (C,):
+                        raise ValueError(f"separator_color tensor must have shape ({C},), got {separator_color.shape}")
+                    bar = separator_color.view(C, 1, 1).expand(C, H, separator_width)
+                else:
+                    bar = torch.full((C, H, separator_width), fill_value=separator_color, device=device)
+
+                bar = bar.unsqueeze(0).expand(B, -1, -1, -1)  # (B, C, H, separator_width)
+
+                # Concatenate [input | separator | prediction]
+                side_by_side = torch.cat([x, bar, y_pred], dim=3)
+                image_tensors = side_by_side.unbind(0)
+            else:
+                image_tensors = y_pred.unbind(0)
+
+            save_frames_to_dir(image_tensors, temp_dir, frame_offset=frame_offset, show_progress=False)
+            frame_offset += len(image_tensors)
+
+        video = render_video_from_dir(temp_dir)
+        return video
