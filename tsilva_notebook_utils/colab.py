@@ -1,4 +1,8 @@
-def disconnect_after_timeout(timeout_seconds=None):    
+def disconnect_after_timeout(timeout_seconds=None): 
+    # Skip if not in Google Colab
+    try: import google.colab
+    except: return
+
     import time
     from tqdm import tqdm
     from google.colab import runtime
@@ -40,6 +44,10 @@ def notify_and_disconnect_after_timeout(message="Notebook execution finished!", 
     disconnect_after_timeout(timeout_seconds=timeout_seconds)
 
 def load_secrets_into_env(keys):
+    # Skip if not in Google Colab
+    try: import google.colab
+    except: return
+
     import os
     from google.colab import userdata
 
@@ -54,6 +62,10 @@ def load_secrets_into_env(keys):
         os.environ[key] = value
 
 def notebook_id_from_title():
+    # Skip if not in Google Colab
+    try: import google.colab
+    except: return
+
     import re
     import unicodedata
     from google.colab import _message
