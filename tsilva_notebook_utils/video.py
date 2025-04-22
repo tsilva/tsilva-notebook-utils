@@ -189,14 +189,15 @@ def save_frames_to_dir(iterator, output_dir, ext="jpg", frame_offset=0, show_pro
         frame.save(filename)
 
 
-def render_loader_video(loader, separator_width=10, separator_color=0):
+def render_loader_video(loader, input_key="input", target_key="target", separator_width=10, separator_color=0):
     import torch
     import tempfile
     from tqdm import tqdm
 
     frame_offset = 0
     with tempfile.TemporaryDirectory() as temp_dir:
-        for x, y in tqdm(loader, desc="Rendering frames"):
+        for batch in tqdm(loader, desc="Rendering frames"):
+            x, y = batch[input_key], batch[target_key]
             B, C, H, W = x.shape
 
             # Create black separator bar
@@ -214,54 +215,137 @@ def render_loader_video(loader, separator_width=10, separator_color=0):
     return video
 
 
-def render_autoencoder_video(model, loader, compare_inputs=True, separator_width=10, separator_color=0):
+def render_autoencoder_video(model, loader, input_key="input", target_key="target", separator_width=10, separator_color=0, fps=30):
     """
-    Renders a video of model predictions. If compare_inputs is True, renders side-by-side input and output
-    with an optional separator bar.
+    Renders a video comparing model input, prediction, and ground truth target side-by-side.
+    The layout for each frame is: [input | separator | prediction | separator | target].
 
     Args:
         model: PyTorch model.
-        loader: DataLoader returning (x, y) batches.
-        compare_inputs (bool): If True, shows input | separator | prediction.
-        separator_width (int): Width of vertical separator in pixels.
-        separator_color (float or Tensor): Value(s) for separator color. Use float for grayscale, Tensor of shape (C,) for RGB.
+        loader: DataLoader returning batches. Each batch must be a dictionary
+                containing keys specified by `input_key` and `target_key`.
+                Assumes tensors are in (B, C, H, W) format.
+        input_key (str): Dictionary key for the input tensor in the batch.
+        target_key (str): Dictionary key for the target (ground truth) tensor
+                          in the batch.
+        separator_width (int): Width of the vertical separator bars in pixels.
+        separator_color (float or Tensor): Value(s) for separator color. Use float for grayscale,
+                                           Tensor of shape (C,) for RGB.
+        fps (int): Frames per second for the output video.
     """
-
     import torch
     import tempfile
     from tqdm import tqdm
+    # Make sure the necessary helper functions are available in the scope
+    # from tsilva_notebook_utils.video import render_video_from_dir, save_frames_to_dir
 
     model.eval()
-    device = next(model.parameters()).device
+    # Determine device from model parameters or fallback
+    try:
+        device = next(model.parameters()).device
+    except StopIteration:
+        print("Warning: Could not determine device from model parameters. Assuming CPU or device from first batch.")
+        try:
+            first_batch = next(iter(loader))
+            if input_key not in first_batch:
+                 raise KeyError(f"Input key '{input_key}' not found in the first batch.")
+            device = first_batch[input_key].device
+            print(f"Inferred device: {device}")
+        except Exception as e:
+            print(f"Could not infer device from data loader: {e}. Defaulting to CPU.")
+            device = torch.device('cpu')
+            if isinstance(model, torch.nn.Module):
+                model.to(device)
+
     frame_offset = 0
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        for x, _ in tqdm(loader):
-            x = x.to(device)
+        print(f"Saving temporary frames to: {temp_dir}")
+        for batch in tqdm(loader, desc="Processing batches"):
+            # Ensure batch is a dictionary and contains both input and target keys
+            if not isinstance(batch, dict) or input_key not in batch or target_key not in batch:
+                 print(f"Warning: Batch format incorrect or missing key ('{input_key}' or '{target_key}'). Skipping batch.")
+                 continue
+
+            x_batch = batch[input_key].to(device)
+            target_batch = batch[target_key].to(device)
+
+            # Check if input and target shapes match (important for visual comparison)
+            if x_batch.shape != target_batch.shape:
+                 print(f"Warning: Input shape {x_batch.shape} differs from target shape {target_batch.shape}. Skipping batch.")
+                 continue
+
             with torch.no_grad():
-                y_pred = model(x)
+                try:
+                    y_pred = model(x_batch)
+                except Exception as e:
+                    print(f"Error during model inference: {e}. Skipping batch.")
+                    continue
 
-            if compare_inputs:
-                B, C, H, W = x.shape
+            # Ensure prediction has the same dimensions as input/target B, C, H, W
+            if y_pred.shape != x_batch.shape:
+                 print(f"Warning: Prediction shape {y_pred.shape} differs from input/target shape {x_batch.shape}. Skipping batch.")
+                 continue
 
-                # Create separator bar
-                if isinstance(separator_color, torch.Tensor):
-                    if separator_color.shape != (C,):
-                        raise ValueError(f"separator_color tensor must have shape ({C},), got {separator_color.shape}")
-                    bar = separator_color.view(C, 1, 1).expand(C, H, separator_width)
+            B, C, H, W = x_batch.shape
+            frames_to_save = []
+
+            # Create separator bar (dtype will be matched later)
+            if isinstance(separator_color, torch.Tensor):
+                if separator_color.numel() == 1:
+                     separator_color_val = separator_color.item()
+                     # Create bar with a base dtype, will convert later if needed
+                     bar_prototype = torch.full((C, H, separator_width), fill_value=separator_color_val, device=device)
+                elif separator_color.shape == (C,):
+                     # Ensure separator tensor is on the correct device
+                     bar_prototype = separator_color.to(device).view(C, 1, 1).expand(C, H, separator_width)
                 else:
-                    bar = torch.full((C, H, separator_width), fill_value=separator_color, device=device)
+                     raise ValueError(f"separator_color tensor must have shape ({C},) or be a single element, got {separator_color.shape}")
+            else: # Assume float or int
+                 bar_prototype = torch.full((C, H, separator_width), fill_value=separator_color, device=device)
 
-                bar = bar.unsqueeze(0).expand(B, -1, -1, -1)  # (B, C, H, separator_width)
+            # Determine the target dtype (use prediction's dtype as reference)
+            target_dtype = y_pred.dtype
 
-                # Concatenate [input | separator | prediction]
-                side_by_side = torch.cat([x, bar, y_pred], dim=3)
-                image_tensors = side_by_side.unbind(0)
-            else:
-                image_tensors = y_pred.unbind(0)
+            # Ensure all parts have the same dtype before concatenation
+            x_batch_compat = x_batch.to(dtype=target_dtype)
+            target_batch_compat = target_batch.to(dtype=target_dtype)
+            y_pred_compat = y_pred.to(dtype=target_dtype) # Already correct dtype, but explicit is fine
+            bar = bar_prototype.to(dtype=target_dtype) # Convert bar to target dtype
+            bar = bar.unsqueeze(0).expand(B, -1, -1, -1)  # (B, C, H, separator_width)
 
-            save_frames_to_dir(image_tensors, temp_dir, frame_offset=frame_offset, show_progress=False)
-            frame_offset += len(image_tensors)
 
-        video = render_video_from_dir(temp_dir)
-        return video
+            # Concatenate [input | separator | prediction | separator | target]
+            combined_frame = torch.cat([x_batch_compat, bar, y_pred_compat, bar, target_batch_compat], dim=3)
+            frames_to_save = combined_frame.unbind(0)
+
+            # Save the frames for the current batch
+            try:
+                 # Ensure save_frames_to_dir is defined and imported
+                 save_frames_to_dir(frames_to_save, temp_dir, frame_offset=frame_offset, show_progress=False)
+                 frame_offset += len(frames_to_save)
+            except NameError:
+                 print("Error: 'save_frames_to_dir' function is not defined. Please import or define it.")
+                 return None # Stop execution if helper is missing
+            except Exception as e:
+                 print(f"Error saving frames: {e}")
+                 # Decide if you want to stop or continue
+                 # return None
+
+        # Render the video from the saved frames
+        if frame_offset == 0:
+             print("No frames were generated. Cannot render video.")
+             return None
+
+        print(f"Rendering video from {frame_offset} frames...")
+        try:
+            # Ensure render_video_from_dir is defined and imported
+            video = render_video_from_dir(temp_dir, fps=fps)
+            print("Video rendering complete.")
+            return video
+        except NameError:
+            print("Error: 'render_video_from_dir' function is not defined. Please import or define it.")
+            return None # Stop execution if helper is missing
+        except Exception as e:
+            print(f"Error rendering video: {e}")
+            return None
