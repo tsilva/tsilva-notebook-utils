@@ -44,9 +44,6 @@ def notify_and_disconnect_after_timeout(message="Notebook execution finished!", 
     disconnect_after_timeout(timeout_seconds=timeout_seconds)
 
 def load_secrets_into_env(keys):
-    # Skip if not in Google Colab
-    try: import google.colab
-    except: return
     try:
         import os
         from google.colab import userdata
@@ -61,9 +58,9 @@ def load_secrets_into_env(keys):
             # Set the secret in the environment
             os.environ[key] = value
     except:
-        from python_dotenv import load_dotenv
+        from dotenv import load_dotenv
         load_dotenv(override=True)
-        
+
 def notebook_id_from_title():
     # Skip if not in Google Colab
     try: import google.colab
