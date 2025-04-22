@@ -47,20 +47,23 @@ def load_secrets_into_env(keys):
     # Skip if not in Google Colab
     try: import google.colab
     except: return
+    try:
+        import os
+        from google.colab import userdata
 
-    import os
-    from google.colab import userdata
+        for key in keys:
+            # Load the secret from userdata
+            value = userdata.get(key)
+            
+            # Assert that the value is available
+            assert value, f"Key {key} not found in userdata"
 
-    for key in keys:
-        # Load the secret from userdata
-        value = userdata.get(key)
+            # Set the secret in the environment
+            os.environ[key] = value
+    except:
+        from python_dotenv import load_dotenv
+        load_dotenv(override=True)
         
-        # Assert that the value is available
-        assert value, f"Key {key} not found in userdata"
-
-        # Set the secret in the environment
-        os.environ[key] = value
-
 def notebook_id_from_title():
     # Skip if not in Google Colab
     try: import google.colab
