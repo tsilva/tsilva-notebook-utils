@@ -215,7 +215,7 @@ def render_loader_video(loader, input_key="input", target_key="target", separato
     return video
 
 
-def render_autoencoder_video(model, loader, input_key="input", target_key="target", separator_width=10, separator_color=0, fps=30):
+def render_autoencoder_video(model, loader, input_key="input", target_key="target", separator_width=10, separator_color=0, fps=30, scale=1):
     """
     Renders a video comparing model input, prediction, and ground truth target side-by-side.
     The layout for each frame is: [input | separator | prediction | separator | target].
@@ -277,7 +277,11 @@ def render_autoencoder_video(model, loader, input_key="input", target_key="targe
 
             with torch.no_grad():
                 try:
-                    y_pred = model(x_batch)
+                    result = model(x_batch)
+                    if isinstance(result, tuple):
+                        y_pred = result[0]
+                    else:
+                        y_pred = result
                 except Exception as e:
                     print(f"Error during model inference: {e}. Skipping batch.")
                     continue
@@ -340,7 +344,7 @@ def render_autoencoder_video(model, loader, input_key="input", target_key="targe
         print(f"Rendering video from {frame_offset} frames...")
         try:
             # Ensure render_video_from_dir is defined and imported
-            video = render_video_from_dir(temp_dir, fps=fps)
+            video = render_video_from_dir(temp_dir, fps=fps, scale=scale)
             print("Video rendering complete.")
             return video
         except NameError:
