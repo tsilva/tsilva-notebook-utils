@@ -35,3 +35,53 @@ def dedupe_dataset(dataset, feature_key: str, hash_func: Callable[[Any], bytes] 
         return True
 
     return dataset.filter(_filter)
+
+
+def process_images(images, mode="color", quantize_colors=None, scale=1.0, crop_paddings=None, noise_factor=0.0):
+    import torch
+    from torchvision.transforms.functional import to_tensor, resize
+
+    processed = []
+    for image in images:
+        # Apply color quantization (after conversion & crop, before tensor)
+        if quantize_colors:
+            image = image.quantize(colors=quantize_colors)
+
+        # Convert mode
+        if mode == "color":
+            image = image.convert("RGB")
+        elif mode == "grayscale":
+            image = image.convert("L")
+        elif mode == "black_and_white":
+            image = image.convert("1")
+        else:
+            raise ValueError(f"Unsupported color mode: {mode}")
+
+        # Crop if needed
+        if crop_paddings:
+            width, height = image.size
+            left = crop_paddings[3]
+            top = crop_paddings[0]
+            right = width - crop_paddings[1]
+            bottom = height - crop_paddings[2]
+            image = image.crop((left, top, right, bottom))
+
+        # Convert to tensor
+        image_ts = to_tensor(image)
+
+        # Resize
+        if scale != 1.0:
+            _, h, w = image_ts.shape
+            new_h, new_w = int(h * scale), int(w * scale)
+            image_ts = resize(image_ts, [new_h, new_w])
+
+        # Apply noise
+        if noise_factor:
+            noise = torch.randn_like(image_ts) * noise_factor
+            image_ts = torch.clamp(image_ts + noise, 0.0, 1.0)
+
+        # Convert to float16
+        image_ts = image_ts.to(torch.float16)
+        processed.append(image_ts)
+
+    return processed
