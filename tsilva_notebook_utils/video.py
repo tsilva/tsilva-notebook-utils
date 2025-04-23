@@ -353,3 +353,11 @@ def render_autoencoder_video(model, loader, input_key="input", target_key="targe
         except Exception as e:
             print(f"Error rendering video: {e}")
             return None
+
+
+def render_video_from_frames(frames_t, **render_kwargs):
+    import tempfile
+    with tempfile.TemporaryDirectory() as temp_dir:
+        save_frames_to_dir(frames_t, temp_dir)
+        video = render_video_from_dir(temp_dir, **render_kwargs)
+    return video
