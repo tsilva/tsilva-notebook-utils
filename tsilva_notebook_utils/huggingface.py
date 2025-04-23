@@ -37,7 +37,7 @@ def dedupe_dataset(dataset, feature_key: str, hash_func: Callable[[Any], bytes] 
     return dataset.filter(_filter)
 
 
-def process_images(images, mode="color", quantize_colors=None, scale=1.0, crop_paddings=None, noise_factor=0.0):
+def process_images(images, mode="color", quantize_colors=None, scale=1.0, crop_paddings=None, noise_factor=0.0, return_type="pt"):
     import numpy as np
     from PIL import Image
     from torchvision.transforms.functional import to_tensor
@@ -80,8 +80,12 @@ def process_images(images, mode="color", quantize_colors=None, scale=1.0, crop_p
         else:
             raise ValueError(f"Unsupported color mode: {mode}")
 
-        # Convert to float16 tensor
-        image_ts = to_tensor(image).to(dtype=torch.float16)
-        processed.append(image_ts)
+        if return_type == "pt":
+            import torch
+            image_ts = to_tensor(image).to(dtype=torch.float16)
+            processed.append(image_ts)
+        elif return_type == "np":
+            image_np = np.array(image).astype(np.float16) / 255.0
+            processed.append(image_np)
 
     return processed
