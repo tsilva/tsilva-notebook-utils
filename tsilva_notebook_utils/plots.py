@@ -157,7 +157,7 @@ def plot_embeddings_with_inputs(
     """
     from bokeh.plotting import figure, show
     from bokeh.models import ColumnDataSource, HoverTool
-    import numpy as np
+    from sklearn.manifold import TSNE, PCA
 
     if output_notebook:
         from bokeh.io import output_notebook
