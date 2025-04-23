@@ -162,3 +162,18 @@ def get_model_parameter_counts(model):
         'trainable': trainable,
         'non_trainable': non_trainable
     }
+
+
+def get_device_from_model(model):
+    """
+    Returns the device of the first parameter in the model.
+
+    Args:
+        model (torch.nn.Module): The PyTorch model.
+
+    Returns:
+        torch.device: The device of the first parameter.
+    """
+    for param in model.parameters():
+        return param.device
+    return None
