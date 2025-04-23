@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tsilva_notebook_utils"
-version = "0.0.21"
+version = "0.0.22"
 description = "Utility functions for Jupyter/Colab notebooks"
 authors = [
     {name = "Tiago Silva"}
@@ -19,7 +19,8 @@ dependencies = [
     "tqdm>=4.0.0",
     "google-colab>=1.0.0",
     "huggingface_hub",
-    "pynvml"
+    "pynvml",
+    "bokeh"
 ]
 
 [tool.hatch.build.targets.wheel]
