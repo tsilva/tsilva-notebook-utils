@@ -38,14 +38,37 @@ def dedupe_dataset(dataset, feature_key: str, hash_func: Callable[[Any], bytes] 
 
 
 def process_images(images, mode="color", quantize_colors=None, scale=1.0, crop_paddings=None, noise_factor=0.0):
-    import torch
-    from torchvision.transforms.functional import to_tensor, resize
+    import numpy as np
+    from PIL import Image
+    from torchvision.transforms.functional import to_tensor
 
     processed = []
     for image in images:
+        # Crop if needed
+        if crop_paddings:
+            width, height = image.size
+            left = crop_paddings[3]
+            top = crop_paddings[0]
+            right = width - crop_paddings[1]
+            bottom = height - crop_paddings[2]
+            image = image.crop((left, top, right, bottom))
+
+
         # Apply color quantization (after conversion & crop, before tensor)
         if quantize_colors:
             image = image.quantize(colors=quantize_colors)
+
+        # Resize
+        if scale != 1.0:
+            new_size = (int(image.width * scale), int(image.height * scale))
+            image = image.resize(new_size, Image.LANCZOS)
+
+        # Apply noise (directly on PIL image)
+        if noise_factor:
+            np_image = np.array(image).astype(np.float32) / 255.0
+            noise = np.random.normal(0, noise_factor, np_image.shape)
+            noisy_np = np.clip(np_image + noise, 0.0, 1.0) * 255.0
+            image = Image.fromarray(noisy_np.astype(np.uint8), mode=image.mode)
 
         # Convert mode
         if mode == "color":
@@ -57,31 +80,8 @@ def process_images(images, mode="color", quantize_colors=None, scale=1.0, crop_p
         else:
             raise ValueError(f"Unsupported color mode: {mode}")
 
-        # Crop if needed
-        if crop_paddings:
-            width, height = image.size
-            left = crop_paddings[3]
-            top = crop_paddings[0]
-            right = width - crop_paddings[1]
-            bottom = height - crop_paddings[2]
-            image = image.crop((left, top, right, bottom))
-
-        # Convert to tensor
-        image_ts = to_tensor(image)
-
-        # Resize
-        if scale != 1.0:
-            _, h, w = image_ts.shape
-            new_h, new_w = int(h * scale), int(w * scale)
-            image_ts = resize(image_ts, [new_h, new_w])
-
-        # Apply noise
-        if noise_factor:
-            noise = torch.randn_like(image_ts) * noise_factor
-            image_ts = torch.clamp(image_ts + noise, 0.0, 1.0)
-
-        # Convert to float16
-        image_ts = image_ts.to(torch.float16)
+        # Convert to float16 tensor
+        image_ts = to_tensor(image).to(dtype=torch.float16)
         processed.append(image_ts)
 
     return processed
