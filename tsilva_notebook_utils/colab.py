@@ -1,4 +1,8 @@
-def disconnect_after_timeout(timeout_seconds=None):    
+def disconnect_after_timeout(timeout_seconds=None): 
+    # Skip if not in Google Colab
+    try: import google.colab
+    except: return
+
     import time
     from tqdm import tqdm
     from google.colab import runtime
@@ -40,20 +44,28 @@ def notify_and_disconnect_after_timeout(message="Notebook execution finished!", 
     disconnect_after_timeout(timeout_seconds=timeout_seconds)
 
 def load_secrets_into_env(keys):
-    import os
-    from google.colab import userdata
+    try:
+        import os
+        from google.colab import userdata
 
-    for key in keys:
-        # Load the secret from userdata
-        value = userdata.get(key)
-        
-        # Assert that the value is available
-        assert value, f"Key {key} not found in userdata"
+        for key in keys:
+            # Load the secret from userdata
+            value = userdata.get(key)
+            
+            # Assert that the value is available
+            assert value, f"Key {key} not found in userdata"
 
-        # Set the secret in the environment
-        os.environ[key] = value
+            # Set the secret in the environment
+            os.environ[key] = value
+    except:
+        from dotenv import load_dotenv
+        load_dotenv(override=True)
 
 def notebook_id_from_title():
+    # Skip if not in Google Colab
+    try: import google.colab
+    except: return
+
     import re
     import unicodedata
     from google.colab import _message

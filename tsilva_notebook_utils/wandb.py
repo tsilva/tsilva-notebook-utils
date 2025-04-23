@@ -1,33 +1,3 @@
-def init_with_defaults(config):
-    import os
-    import wandb
-    from tsilva_notebook_utils.wandb import login
-
-    NOTEBOOK_ID = os.getenv("NOTEBOOK_ID"); assert NOTEBOOK_ID is not None, "NOTEBOOK_ID environment variable is not set"
-    WANDB_API_KEY = os.getenv("WANDB_API_KEY"); assert WANDB_API_KEY is not None, "WANDB_API_KEY environment variable is not set"
-
-    # Login to W&B
-    login(WANDB_API_KEY, NOTEBOOK_ID)
-
-    # Initialize a W&B run for training
-    return wandb.init(project=NOTEBOOK_ID, config=config)
-
-def login(api_key: str, project_id: str) -> str:
-    import wandb
-
-    # Login to W&B
-    wandb.login(key=api_key)
-
-    # Initialize a W&B run for training
-    run = wandb.init(
-        project=project_id,
-        reinit=True
-    )
-
-    # Return the run URL
-    run_url = run.get_url()
-    return run_url
-
 def render_run_iframe():
     import wandb
     from IPython.display import HTML
