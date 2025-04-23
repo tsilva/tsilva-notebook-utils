@@ -189,7 +189,7 @@ def save_frames_to_dir(iterator, output_dir, ext="jpg", frame_offset=0, show_pro
         frame.save(filename)
 
 
-def render_loader_video(loader, input_key="input", target_key="target", separator_width=10, separator_color=0):
+def render_loader_video(loader, input_key="input", target_key="target", separator_width=10, separator_color=0, **render_kwargs):
     import torch
     import tempfile
     from tqdm import tqdm
@@ -211,11 +211,11 @@ def render_loader_video(loader, input_key="input", target_key="target", separato
             save_frames_to_dir(image_tensors, temp_dir, frame_offset=frame_offset, show_progress=False)
             frame_offset += len(image_tensors)
 
-        video = render_video_from_dir(temp_dir)
+        video = render_video_from_dir(temp_dir, **render_kwargs)
     return video
 
 
-def render_autoencoder_video(model, loader, input_key="input", target_key="target", separator_width=10, separator_color=0, fps=30, scale=1):
+def render_autoencoder_video(model, loader, input_key="input", target_key="target", separator_width=10, separator_color=0, **render_kwargs):
     """
     Renders a video comparing model input, prediction, and ground truth target side-by-side.
     The layout for each frame is: [input | separator | prediction | separator | target].
@@ -344,7 +344,7 @@ def render_autoencoder_video(model, loader, input_key="input", target_key="targe
         print(f"Rendering video from {frame_offset} frames...")
         try:
             # Ensure render_video_from_dir is defined and imported
-            video = render_video_from_dir(temp_dir, fps=fps, scale=scale)
+            video = render_video_from_dir(temp_dir, **render_kwargs)
             print("Video rendering complete.")
             return video
         except NameError:
