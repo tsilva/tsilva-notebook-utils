@@ -74,7 +74,7 @@ def plot_histogram(
 
     return plt
 
-def plot_training_loss(data):
+def plot_loss_curve(data):
     return plot_line(
         data, 
         title="Training Loss", 
@@ -249,7 +249,6 @@ def plot_vector_batch_heatmap(
     import numpy as np
     import seaborn as sns
     from matplotlib import pyplot as plt
-    import torch
 
     data = to_numpy(tensor_batch)
 
@@ -282,7 +281,7 @@ def plot_vector_batch_heatmap(
 
     return fig
 
-def plot_tensor_batch_stats_as_heatmaps(
+def plot_tensor_stats_heatmaps(
     tensor_batch,
     title_prefix="Latent Vectors",
     collapse_grid_width=16,

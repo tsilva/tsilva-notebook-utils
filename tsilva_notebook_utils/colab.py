@@ -26,14 +26,14 @@ def disconnect_after_timeout(timeout_seconds=None):
 
 def notify_and_disconnect_after_timeout(message="Notebook execution finished!", timeout_seconds=None):  
     import os
-    from .popdesk import notify
+    from .notifications import send_popdesk_notification
     
     notebook_id = os.getenv("NOTEBOOK_ID"); assert notebook_id is not None, "NOTEBOOK_ID environment variable is not set"
     notification_url = os.getenv("NOTIFICATION_URL"); assert notification_url is not None, "NOTIFICATION_URL environment variable is not set"
     notification_auth_token = os.getenv("NOTIFICATION_AUTH_TOKEN"); assert notification_auth_token is not None, "NOTIFICATION_AUTH_TOKEN environment variable is not set"
     
     # Send notification
-    notify(
+    send_popdesk_notification(
         notification_url,
         notification_auth_token,
         notebook_id,

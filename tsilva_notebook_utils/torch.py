@@ -1,10 +1,10 @@
-def get_current_device():
-    import torch
-    return torch.cuda.current_device() if torch.cuda.is_available() else torch.device("cpu")
+import torch
 
+def get_current_device():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return device
 
 def get_gpu_stats():
-    import torch
     assert torch.cuda.is_available(), "CUDA is not available. Running on CPU."
 
     device = get_current_device()
@@ -81,62 +81,32 @@ def apply_weight_init(model, weight_init, nonlinearity):
     return model
 
 
-def calc_model_layer_grad_norms(model):
+def get_model_grad_norms(model, per_layer=False):
     """
-    Calculates the L2 norm of gradients for each parameter in the model.
-
+    Calculates the L2 norm of gradients for each parameter in the model and/or the total L2 norm.
     Args:
         model (torch.nn.Module): The model containing parameters with gradients.
-
+        per_layer (bool): If True, returns a dict of per-layer gradient norms. If False, returns only the total norm.
     Returns:
-        layer_norms (dict): A dictionary mapping parameter names to their individual L2 gradient norms.
+        If per_layer is True: (total_norm, layer_norms)
+        If per_layer is False: total_norm
     """
     layer_norms = {}
     for name, param in model.named_parameters():
         if param.grad is not None:
             layer_norms[name] = param.grad.data.norm(2).item()
-    return layer_norms
-
-
-def calc_model_total_grad_norm(model, layer_norms=None):
-    """
-    Calculates the total L2 norm of gradients across all parameters in the model,
-    using the individual parameter norms.
-
-    Args:
-        model (torch.nn.Module): The model containing parameters with gradients.
-        layer_norms (dict, optional): A dictionary mapping parameter names to their individual L2 gradient norms.
-            If provided, this will be used instead of calculating them again.
-
-    Returns:
-        total_norm (float): The total L2 norm of all parameter gradients.
-        layer_norms (dict): A dictionary mapping parameter names to their individual L2 gradient norms.
-    """
-    layer_norms = layer_norms if layer_norms else calc_model_layer_grad_norms(model)
     total_norm_sq = sum(norm ** 2 for norm in layer_norms.values())
     total_norm = total_norm_sq ** 0.5
+    if per_layer:
+        return total_norm, layer_norms
     return total_norm
-
-def calc_model_grad_norms(model):
-    """
-    Calculates the L2 norm of gradients for each parameter in the model and the total L2 norm.
-    Args:
-        model (torch.nn.Module): The model containing parameters with gradients.
-    Returns:
-        total_norm (float): The total L2 norm of all parameter gradients.
-        layer_norms (dict): A dictionary mapping parameter names to their individual L2 gradient norms.
-    """
-    layer_norms = calc_model_layer_grad_norms(model)
-    total_norm = calc_model_total_grad_norm(model, layer_norms)
-    return total_norm, layer_norms
 
 def get_model_parameter_counts(model):
     """
     Returns a dictionary with total, trainable, and non-trainable parameter counts in a PyTorch model.
-
+    For richer model summaries, consider using torchinfo (https://github.com/TylerYep/torchinfo).
     Args:
         model (torch.nn.Module): The PyTorch model.
-
     Returns:
         dict: Dictionary containing counts of parameters.
             {
@@ -164,7 +134,7 @@ def get_model_parameter_counts(model):
     }
 
 
-def get_device_from_model(model):
+def get_model_device(model):
     """
     Returns the device of the first parameter in the model.
 

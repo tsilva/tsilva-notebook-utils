@@ -5,8 +5,7 @@ def to_numpy(data):
     import torch
     import numpy as np
     
-    if isinstance(data, torch.Tensor):
-        return data.detach().cpu().numpy()
+    if isinstance(data, torch.Tensor): return data.detach().cpu().numpy()
     return np.asarray(data)
 
 def reshape_vector_to_grid(vector, max_width=16):

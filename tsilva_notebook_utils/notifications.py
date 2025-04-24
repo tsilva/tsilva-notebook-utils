@@ -1,5 +1,5 @@
 
-def notify(url, auth_token, title, message):
+def send_popdesk_notification(url, auth_token, title, message):
     import requests
     
     headers = {
