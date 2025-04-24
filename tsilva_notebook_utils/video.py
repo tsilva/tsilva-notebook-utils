@@ -117,15 +117,15 @@ def render_video_from_batches(data, frame_mapper=None, **video_kwargs):
         return create_video_from_frames(temp_dir, **video_kwargs)
 
 
-def render_video_from_dataloader(loader, input_key="input", target_key="target",
+def render_video_from_dataloader(loader, x_key="x", y_key="y",
                                  model=None, separator_width=10, separator_color=0, **video_kwargs):
     """
     Renders model predictions vs targets from a DataLoader as a video.
 
     Args:
         loader: DataLoader or batch iterator.
-        input_key: Key for inputs in the batch.
-        target_key: Key for targets in the batch.
+        x_key: Key for inputs in the batch.
+        y_key: Key for targets in the batch.
         model: Optional model to generate predictions.
         separator_width: Width of the visual separator between images.
         separator_color: Color value for the separator.
@@ -135,7 +135,7 @@ def render_video_from_dataloader(loader, input_key="input", target_key="target",
         HTML object of the rendered video.
     """
     def make_frames(batch):
-        inputs, targets = batch[input_key], batch[target_key]
+        inputs, targets = batch[x_key], batch[y_key]
         batch_size = inputs.size(0)
         sep = torch.full((batch_size, inputs.size(1), inputs.size(2), separator_width),
                          fill_value=separator_color, device=inputs.device)
