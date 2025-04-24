@@ -228,3 +228,94 @@ def plot_embeddings_with_inputs(
 
     if output_notebook: show(p)
     else: return p
+
+
+def plot_vector_batch_heatmap(
+    tensor_batch,
+    title="Vector Batch Heatmap",
+    xlabel="Dimensions",
+    ylabel="Batch Index",
+    cmap="viridis",
+    tick_step=10,
+    base_width=12,
+    base_height_per_row=0.3,
+    max_height=12,
+    min_height=2
+):
+    """
+    Returns the matplotlib Figure object of the heatmap.
+    """
+    from .numpy import to_numpy
+    import numpy as np
+    import seaborn as sns
+    from matplotlib import pyplot as plt
+    import torch
+
+    data = to_numpy(tensor_batch)
+
+    batch_size, vector_dim = data.shape
+    fig_height = np.clip(batch_size * base_height_per_row, min_height, max_height)
+
+    fig, ax = plt.subplots(figsize=(base_width, fig_height))
+    sns.heatmap(data, cmap=cmap, cbar=True, ax=ax)
+
+    # X-ticks
+    x_step = tick_step if vector_dim > 20 else 1
+    x_ticks = list(np.arange(0, vector_dim, x_step))
+    if (vector_dim - 1) not in x_ticks:
+        x_ticks.append(vector_dim - 1)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels([str(i) for i in x_ticks], rotation=90)
+
+    # Y-ticks
+    y_step = tick_step if batch_size > 20 else 1
+    y_ticks = list(np.arange(0, batch_size, y_step))
+    if (batch_size - 1) not in y_ticks:
+        y_ticks.append(batch_size - 1)
+    ax.set_yticks(y_ticks)
+    ax.set_yticklabels([str(i) for i in y_ticks], rotation=0)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    fig.tight_layout()
+
+    return fig
+
+def plot_tensor_batch_stats_as_heatmaps(
+    tensor_batch,
+    title_prefix="Latent Vectors",
+    collapse_grid_width=16,
+    stats=["raw", "mean", "median", "std", "var"],
+    **heatmap_kwargs
+):  
+    import torch
+    from matplotlib import pyplot as plt
+    from .numpy import reshape_vector_to_grid
+
+    
+    assert isinstance(tensor_batch, torch.Tensor), "Input must be a PyTorch tensor"
+
+    stat_funcs = {
+        "raw": lambda x: x,
+        "mean": lambda x: x.mean(dim=0),
+        "median": lambda x: x.median(dim=0).values,
+        "std": lambda x: x.std(dim=0, unbiased=False),
+        "var": lambda x: x.var(dim=0, unbiased=False),
+    }
+
+    figures = {}
+    for stat in stats:
+        data = stat_funcs[stat](tensor_batch)
+        if stat != "raw":
+            data = reshape_vector_to_grid(data, max_width=collapse_grid_width)
+        fig = plot_vector_batch_heatmap(
+            data,
+            title=f"{title_prefix} - {stat.capitalize()}",
+            **heatmap_kwargs
+        )
+        figures[stat] = fig
+        plt.close(fig)
+
+    return figures
+

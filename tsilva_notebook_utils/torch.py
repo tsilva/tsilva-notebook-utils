@@ -177,3 +177,53 @@ def get_device_from_model(model):
     for param in model.parameters():
         return param.device
     return None
+
+
+def get_conv_filter_images(model, nrow=8, padding=1, scale=4):
+    """
+    Returns a dict of PIL images visualizing filters in Conv2d and ConvTranspose2d layers.
+    
+    Args:
+        model (torch.nn.Module): The PyTorch model.
+        nrow (int): Number of filters per row in the grid.
+        padding (int): Padding between filters in the grid.
+        scale (int): Factor to scale up the output images.
+        
+    Returns:
+        dict: {layer_name: PIL.Image}
+    """
+    import torch
+    import torchvision.utils as vutils
+    from torchvision.transforms.functional import to_pil_image
+    from collections import OrderedDict
+    from PIL import Image
+
+    filter_images = OrderedDict()
+    
+    for name, layer in model.named_modules():
+        if isinstance(layer, (torch.nn.Conv2d, torch.nn.ConvTranspose2d)):
+            weights = layer.weight.data.clone().cpu()
+
+            # Normalize to [0, 1]
+            weights_min = weights.min()
+            weights_max = weights.max()
+            weights = (weights - weights_min) / (weights_max - weights_min + 1e-5)
+
+            # If it's an RGB-like input (3 channels), show all channels
+            if weights.shape[1] == 3:
+                grid = vutils.make_grid(weights, nrow=nrow, padding=padding)
+            else:
+                # Visualize only the first input channel
+                grid = vutils.make_grid(weights[:, 0:1, :, :], nrow=nrow, padding=padding)
+            
+            # Convert to PIL
+            pil_img = to_pil_image(grid)
+
+            # Resize for visibility
+            if scale > 1:
+                new_size = (pil_img.width * scale, pil_img.height * scale)
+                pil_img = pil_img.resize(new_size, resample=Image.NEAREST)
+
+            filter_images[name] = pil_img
+            
+    return filter_images
