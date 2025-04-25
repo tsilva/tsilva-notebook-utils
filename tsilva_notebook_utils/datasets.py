@@ -5,6 +5,7 @@ from PIL import Image
 from datasets import Dataset
 from typing import Callable, Any
 
+
 class AugmentedImageDataset(Dataset):
     def __init__(
         self, 
@@ -33,17 +34,20 @@ class AugmentedImageDataset(Dataset):
         x = item["x"].clone()
         y = item["y"]
 
-        if random.random() < self.prob:
-            if random.random() < self.noise_prob:
-                noise = torch.randn_like(x) * self.noise_std
-                x = torch.clamp(x + noise, 0.0, 1.0)
+        def _process(_x):
+            if random.random() < self.prob:
+                if random.random() < self.noise_prob:
+                    noise = torch.randn_like(_x) * self.noise_std
+                    _x = torch.clamp(_x + noise, 0.0, 1.0)
 
-            if random.random() < self.flip_prob:
-                if random.random() < self.hflip_prob:
-                    x = torch.flip(x, dims=[2])  # Horizontal flip
-                if random.random() < self.vflip_prob:
-                    x = torch.flip(x, dims=[1])  # Vertical flip
-
+                if random.random() < self.flip_prob:
+                    if random.random() < self.hflip_prob:
+                        _x = torch.flip(_x, dims=[1])  # Horizontal flip
+                    if random.random() < self.vflip_prob:
+                        _x = torch.flip(_x, dims=[2])  # Vertical flip
+            return _x
+        
+        x = [_process(_x) for _x in x]
         return {"x": x, "y": y}
 
     def __len__(self):
