@@ -3,7 +3,7 @@ import random
 from datasets import IterableDataset
 from itertools import tee, islice
 
-class AugmentedDataset(torch.utils.data.Dataset):
+class AugmentedImageDataset(torch.utils.data.Dataset):
     def __init__(
         self, 
         base_dataset, 
