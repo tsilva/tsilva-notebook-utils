@@ -118,7 +118,7 @@ def render_video_from_batches(data, frame_mapper=None, **video_kwargs):
 
 
 def render_video_from_dataloader(loader, x_key="x", y_key="y",
-                                 model=None, separator_width=10, separator_color=0, **video_kwargs):
+                                 model=None, separator_width=10, separator_color=0, train_drift=1, **video_kwargs):
     """
     Renders model predictions vs targets from a DataLoader as a video.
 
@@ -137,21 +137,41 @@ def render_video_from_dataloader(loader, x_key="x", y_key="y",
     def make_frames(batch):
         inputs, targets = batch[x_key], batch[y_key]
         batch_size = inputs.size(0)
-        sep = torch.full((batch_size, inputs.size(1), inputs.size(2), separator_width),
-                         fill_value=separator_color, device=inputs.device)
-        display_stack = [inputs, sep]
+
+        device = inputs.device
+        if model is not None:
+            device = next(model.parameters()).device
+
+        inputs = inputs.to(device)
+        targets = targets.to(device)
 
         if model is not None:
             model.eval()
-            device = next(model.parameters()).device
+            all_inputs = []
+            all_predictions = []
+            all_targets = []
             with torch.no_grad():
-                predictions = model(inputs.to(device))
-            if isinstance(predictions, tuple):
-                predictions = predictions[0]
-            predictions = predictions.to(inputs.device)
+                _inputs = inputs
+                for _ in range(train_drift):
+                    predictions = model(_inputs)
+                    if isinstance(predictions, tuple): predictions = predictions[0]
+                    all_inputs.append(inputs)
+                    all_predictions.append(predictions)
+                    all_targets.append(targets)
+                    _inputs = predictions
+            inputs = torch.cat(all_inputs, dim=0)
+            predictions = torch.cat(all_predictions, dim=0)
+            targets = torch.cat(all_targets, dim=0)
+
+            # Create separator matching train_drifted size
+            sep = torch.full((inputs.size(0), inputs.size(1), inputs.size(2), separator_width),
+                            fill_value=separator_color, device=device)
+
             display_stack = [inputs, sep, predictions, sep, targets]
         else:
-            display_stack.append(targets)
+            sep = torch.full((batch_size, inputs.size(1), inputs.size(2), separator_width),
+                            fill_value=separator_color, device=device)
+            display_stack = [inputs, sep, targets]
 
         return torch.cat(display_stack, dim=3).cpu().unbind(0)
 
