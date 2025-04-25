@@ -120,3 +120,4 @@ def hf_push_model_to_hub(repo_id: str, model, model_file_name="model.pt", privat
         repo_id=repo_id,
         repo_type="model"
     )
+
