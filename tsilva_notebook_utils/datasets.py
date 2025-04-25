@@ -42,9 +42,9 @@ class AugmentedImageDataset(Dataset):
 
                 if random.random() < self.flip_prob:
                     if random.random() < self.hflip_prob:
-                        _x = torch.flip(_x, dims=[1])  # Horizontal flip
+                        _x = torch.flip(_x, dims=[2])  # Horizontal flip
                     if random.random() < self.vflip_prob:
-                        _x = torch.flip(_x, dims=[2])  # Vertical flip
+                        _x = torch.flip(_x, dims=[1])  # Vertical flip
             return _x
         
         x = [_process(_x) for _x in x]
