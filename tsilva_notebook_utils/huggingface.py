@@ -112,7 +112,7 @@ def hf_push_model_to_hub(repo_id: str, model, model_file_name="model.pt", privat
     
     hf_create_or_get_repo(repo_id, private=private)
 
-    torch.save(model.state_dict(), model_file_name)
+    torch.save(model, model_file_name)
 
     upload_file(
         path_or_fileobj=model_file_name,
