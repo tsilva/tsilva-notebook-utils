@@ -1,4 +1,5 @@
 import torch
+import random
 
 def get_current_device():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -197,3 +198,4 @@ def get_conv_filter_images(model, nrow=8, padding=1, scale=4):
             filter_images[name] = pil_img
             
     return filter_images
+
