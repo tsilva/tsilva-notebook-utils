@@ -52,7 +52,6 @@ def process_images(images, mode="color", quantize_colors=None, scale=1.0, crop_p
             bottom = height - crop_paddings[2]
             image = image.crop((left, top, right, bottom))
 
-
         # Apply color quantization (after conversion & crop, before tensor)
         if quantize_colors:
             image = image.quantize(colors=quantize_colors)

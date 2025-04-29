@@ -62,7 +62,6 @@ def load_secrets_into_env(keys):
         value = os.getenv(key)
         assert value, f"Key {key} not found in environment variables"
         values.append(value)
-    return values
 
 
 def notebook_id_from_title():
