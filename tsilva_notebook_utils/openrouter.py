@@ -13,6 +13,7 @@ class OpenRouterLLM():
         )
 
     def prompt(self, messages, temperature=0.0):
+        if type(messages) is str: messages = [{"role": "user", "content": messages}]
         response = self.client.chat.completions.create(
             model=self.model_id,
             messages=messages,
@@ -20,4 +21,4 @@ class OpenRouterLLM():
         )
         content = response.choices[0].message.content
         return content
-    
+  
