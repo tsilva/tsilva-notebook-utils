@@ -1,5 +1,4 @@
-def get_file_content_from_github(token, owner, repo, file_path, branch="main"):
-    import sys
+def github_get_file_contents(token, owner, repo, file_path, branch="main"):
     import requests
     import base64
 
