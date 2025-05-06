@@ -3,7 +3,7 @@ def github_get_file_contents(repo, file_path, branch="main", username=None, toke
     import requests
     import base64
 
-    if username is None: owner = os.getenv("GITHUB_USERNAME")
+    if username is None: username = os.getenv("GITHUB_USERNAME")
     if not username: raise ValueError("GITHUB_USERNAME environment variable not set")
 
     if token is None: token = os.getenv("GITHUB_TOKEN")
