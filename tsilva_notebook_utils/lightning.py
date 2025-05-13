@@ -123,8 +123,11 @@ class MNISTDataModule(pl.LightningDataModule):
         seed, 
         num_workers=2, 
         train_shuffle=True,
+        train_pin_memory=True,
         val_shuffle=False,
+        val_pin_memory=True,
         test_shuffle=False,
+        test_pin_memory=False,
         augmentation_pipeline=[],
         pretrained_dataset_id=None
     ):
@@ -136,12 +139,14 @@ class MNISTDataModule(pl.LightningDataModule):
         self.seed = seed
         self.num_workers = num_workers
         self.train_shuffle = train_shuffle
+        self.train_pin_memory = train_pin_memory
         self.val_shuffle = val_shuffle
+        self.val_pin_memory = val_pin_memory
         self.test_shuffle = test_shuffle
+        self.test_pin_memory = test_pin_memory
         self.n_classes = 10
         self.augmentation_pipeline = augmentation_pipeline
         self.pretrained_dataset_id = pretrained_dataset_id
-
 
     def prepare_data(self):
         MNIST(root=self.download_path, train=True, download=True)
@@ -160,13 +165,14 @@ class MNISTDataModule(pl.LightningDataModule):
         )
         self.val_set.dataset.transform = self.test_transform
         self.test_set = MNIST(root=self.download_path, train=False, transform=self.test_transform)
-
+        
     def train_dataloader(self):
         return DataLoader(
             self.train_set, 
             batch_size=self.batch_size, 
             shuffle=self.train_shuffle, 
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
+            pin_memory=self.train_pin_memory
         )
 
     def val_dataloader(self):
@@ -174,7 +180,8 @@ class MNISTDataModule(pl.LightningDataModule):
             self.val_set, 
             batch_size=self.batch_size, 
             shuffle=self.val_shuffle, 
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
+            pin_memory=self.val_pin_memory
         )
 
     def test_dataloader(self):
@@ -182,7 +189,8 @@ class MNISTDataModule(pl.LightningDataModule):
             self.test_set, 
             batch_size=self.batch_size, 
             shuffle=self.test_shuffle, 
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
+            pin_memory=self.test_pin_memory
         )
     
 
@@ -194,8 +202,11 @@ class CIFAR10DataModule(pl.LightningDataModule):
         seed, 
         num_workers=2, 
         train_shuffle=True,
+        train_pin_memory=True,
         val_shuffle=False,
+        val_pin_memory=True,
         test_shuffle=False,
+        test_pin_memory=False,
         augmentation_pipeline=[],
         pretrained_dataset_id=None
     ):
@@ -207,8 +218,11 @@ class CIFAR10DataModule(pl.LightningDataModule):
         self.seed = seed
         self.num_workers = num_workers
         self.train_shuffle = train_shuffle
+        self.train_pin_memory = train_pin_memory
         self.val_shuffle = val_shuffle
+        self.val_pin_memory = val_pin_memory
         self.test_shuffle = test_shuffle
+        self.test_pin_memory = test_pin_memory
         self.n_classes = 10
         self.augmentation_pipeline = augmentation_pipeline
         self.pretrained_dataset_id = pretrained_dataset_id
@@ -236,7 +250,8 @@ class CIFAR10DataModule(pl.LightningDataModule):
             self.train_set, 
             batch_size=self.batch_size, 
             shuffle=self.train_shuffle, 
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
+            pin_memory=self.train_pin_memory
         )
 
     def val_dataloader(self):
@@ -244,7 +259,8 @@ class CIFAR10DataModule(pl.LightningDataModule):
             self.val_set, 
             batch_size=self.batch_size, 
             shuffle=self.val_shuffle, 
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
+            pin_memory=self.val_pin_memory
         )
 
     def test_dataloader(self):
@@ -252,7 +268,8 @@ class CIFAR10DataModule(pl.LightningDataModule):
             self.test_set, 
             batch_size=self.batch_size, 
             shuffle=self.test_shuffle, 
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
+            pin_memory=self.test_pin_memory
         )
 
 
