@@ -195,7 +195,7 @@ class BaseDataModule(pl.LightningDataModule):
             batch_size=self.batch_size, 
             shuffle=self.train_shuffle, 
             num_workers=self.train_n_workers,
-            pin_memory=self.train_pin_memory
+            pin_memory=self.train_pin_memory,
             **kwargs
         )
 
@@ -205,7 +205,7 @@ class BaseDataModule(pl.LightningDataModule):
             batch_size=self.batch_size, 
             shuffle=self.val_shuffle, 
             num_workers=self.val_n_workers,
-            pin_memory=self.val_pin_memory
+            pin_memory=self.val_pin_memory,
             **kwargs
         )
 
@@ -215,7 +215,7 @@ class BaseDataModule(pl.LightningDataModule):
             batch_size=self.batch_size, 
             shuffle=self.test_shuffle, 
             num_workers=self.test_n_workers,
-            pin_memory=self.test_pin_memory
+            pin_memory=self.test_pin_memory,
             **kwargs
         )
 
