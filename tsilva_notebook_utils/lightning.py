@@ -1,14 +1,12 @@
 import time
 import torch
+import numpy as np
 from typing import Union
 import pytorch_lightning as pl
 from torchvision import transforms
 from torchvision.datasets import MNIST
-from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10
 from torch.utils.data import DataLoader
-from collections import defaultdict
-from torch.utils.data import Subset
 
 DATASET_SPECS = {
     "imagenet": {
