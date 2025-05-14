@@ -305,7 +305,7 @@ def create_data_module(config, **kwargs):
         "batch_size": config['batch_size'],
         "train_size": config['train_size'],
         "augmentation_pipeline": config.get('augmentation_pipeline', []),
-        "pretrained_dataset_id": config.get('pretrained_dataset_id', None)
+        "pretrained_dataset_id": config.get('pretrained_dataset_id', None),
         **kwargs
     })
     datamodule.prepare_data()
