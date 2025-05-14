@@ -115,7 +115,9 @@ def build_dataset_transforms(dataset_id: str, augmentation_pipeline: list = []):
     return train_transform, test_transform
 
 
-class MNISTDataModule(pl.LightningDataModule):
+class BaseDataModule(pl.LightningDataModule):
+    DatasetClass = None  # To be set by subclasses
+
     def __init__(
         self, 
         batch_size, 
@@ -134,51 +136,63 @@ class MNISTDataModule(pl.LightningDataModule):
         pretrained_dataset_id=None
     ):
         super().__init__()
-        self.dataset_id = "mnist"
+        assert self.DatasetClass is not None, "DatasetClass must be set in subclass"
+        self.dataset_id = self.DatasetClass.__name__.lower().replace("dataset", "")
         self.download_path = f"./temp/{self.dataset_id}"
         self.batch_size = batch_size
         self.train_size = train_size
         self.seed = seed
+        
+        # Split-specific args (default to base if None)
         self.train_shuffle = train_shuffle
         self.train_pin_memory = train_pin_memory
         self.train_n_workers = train_n_workers
-        self.val_shuffle = val_shuffle
+        # Set val/test shuffle default to False if not provided
+        self.val_shuffle = False if val_shuffle is None else val_shuffle
         self.val_pin_memory = val_pin_memory
         self.val_n_workers = val_n_workers
-        self.test_shuffle = test_shuffle
+        self.test_shuffle = False if test_shuffle is None else test_shuffle
         self.test_pin_memory = test_pin_memory
         self.test_n_workers = test_n_workers
+
         self.augmentation_pipeline = augmentation_pipeline
         self.pretrained_dataset_id = pretrained_dataset_id
         self.class_names = None
 
     def prepare_data(self):
-        MNIST(root=self.download_path, train=True, download=True)
-        MNIST(root=self.download_path, train=False, download=True)
+        self.DatasetClass(root=self.download_path, train=True, download=True)
+        self.DatasetClass(root=self.download_path, train=False, download=True)
 
     def setup(self, stage=None):
         dataset_id = self.pretrained_dataset_id if self.pretrained_dataset_id else self.dataset_id
         self.train_transform, self.test_transform = build_dataset_transforms(dataset_id, self.augmentation_pipeline)
 
-        full = MNIST(root=self.download_path, train=True, transform=self.train_transform)
-        self.class_names = list(full.classes)
+        if stage is None or stage == "fit":
+            full = self.DatasetClass(root=self.download_path, train=True, transform=self.train_transform)
+            self.class_names = list(full.classes)
+            total = len(full)
+            train_size = int(total * self.train_size)
+            val_size = total - train_size
+            self.train_set, self.val_set = torch.utils.data.random_split(
+                full, [train_size, val_size], generator=torch.Generator().manual_seed(self.seed)
+            )
+            self.val_set.dataset.transform = self.test_transform
 
-        total = len(full)
-        train_size = int(total * self.train_size)
-        val_size = total - train_size
-        self.train_set, self.val_set = torch.utils.data.random_split(
-            full, [train_size, val_size], generator=torch.Generator().manual_seed(self.seed)
-        )
-        self.val_set.dataset.transform = self.test_transform
-        self.test_set = MNIST(root=self.download_path, train=False, transform=self.test_transform)
+        if stage is None or stage == "test":
+            self.test_set = self.DatasetClass(root=self.download_path, train=False, transform=self.test_transform)
+
+    def _get_split_arg(self, split, arg_name):
+        base = getattr(self, f"base_{arg_name}")
+        split_val = getattr(self, f"{split}_{arg_name}")
+        return base if split_val is None else split_val
 
     def train_dataloader(self, **kwargs):
         return DataLoader(
             self.train_set, 
             batch_size=self.batch_size, 
-            shuffle=self.train_shuffle, 
-            num_workers=self.train_n_workers,
-            pin_memory=self.train_pin_memory,
+            shuffle=self._get_split_arg("train", "shuffle"), 
+            num_workers=self._get_split_arg("train", "n_workers"),
+            pin_memory=self._get_split_arg("train", "pin_memory"),
             **kwargs
         )
 
@@ -186,9 +200,9 @@ class MNISTDataModule(pl.LightningDataModule):
         return DataLoader(
             self.val_set, 
             batch_size=self.batch_size, 
-            shuffle=self.val_shuffle, 
-            num_workers=self.val_n_workers,
-            pin_memory=self.val_pin_memory,
+            shuffle=self._get_split_arg("val", "shuffle"), 
+            num_workers=self._get_split_arg("val", "n_workers"),
+            pin_memory=self._get_split_arg("val", "pin_memory"),
             **kwargs
         )
 
@@ -196,112 +210,27 @@ class MNISTDataModule(pl.LightningDataModule):
         return DataLoader(
             self.test_set, 
             batch_size=self.batch_size, 
-            shuffle=self.test_shuffle, 
-            num_workers=self.test_n_workers,
-            pin_memory=self.test_pin_memory,
+            shuffle=self._get_split_arg("test", "shuffle"), 
+            num_workers=self._get_split_arg("test", "n_workers"),
+            pin_memory=self._get_split_arg("test", "pin_memory"),
             **kwargs
         )
 
-
-class CIFAR10DataModule(pl.LightningDataModule):
-    def __init__(
-        self, 
-        batch_size, 
-        train_size, 
-        seed, 
-        train_shuffle=True,
-        train_pin_memory=True,
-        train_n_workers=2,
-        val_shuffle=False,
-        val_pin_memory=True,
-        val_n_workers=2,
-        test_shuffle=False,
-        test_pin_memory=False,
-        test_n_workers=2,
-        augmentation_pipeline=[],
-        pretrained_dataset_id=None
-    ):
-        super().__init__()
-        self.dataset_id = "cifar10"
-        self.download_path = f"./temp/{self.dataset_id}"
-        self.batch_size = batch_size
-        self.train_size = train_size
-        self.seed = seed
-        self.train_shuffle = train_shuffle
-        self.train_pin_memory = train_pin_memory
-        self.train_n_workers = train_n_workers
-        self.val_shuffle = val_shuffle
-        self.val_pin_memory = val_pin_memory
-        self.val_n_workers = val_n_workers
-        self.test_shuffle = test_shuffle
-        self.test_pin_memory = test_pin_memory
-        self.test_n_workers = test_n_workers
-        self.augmentation_pipeline = augmentation_pipeline
-        self.pretrained_dataset_id = pretrained_dataset_id
-        self.class_names = None
-
-    def prepare_data(self):
-        CIFAR10(root=self.download_path, train=True, download=True)
-        CIFAR10(root=self.download_path, train=False, download=True)
-
-    def setup(self, stage=None):
-        dataset_id = self.pretrained_dataset_id if self.pretrained_dataset_id else self.dataset_id
-        self.train_transform, self.test_transform = build_dataset_transforms(dataset_id, self.augmentation_pipeline)
-
-        full = CIFAR10(root=self.download_path, train=True, transform=self.train_transform)
-        self.class_names = list(full.classes)
-
-        total = len(full)
-        train_size = int(total * self.train_size)
-        val_size = total - train_size
-        self.train_set, self.val_set = torch.utils.data.random_split(
-            full, [train_size, val_size], generator=torch.Generator().manual_seed(self.seed)
-        )
-        self.val_set.dataset.transform = self.test_transform
-        self.test_set = CIFAR10(root=self.download_path, train=False, transform=self.test_transform)
-
-    def train_dataloader(self, **kwargs):
-        return DataLoader(
-            self.train_set, 
-            batch_size=self.batch_size, 
-            shuffle=self.train_shuffle, 
-            num_workers=self.train_n_workers,
-            pin_memory=self.train_pin_memory,
-            **kwargs
-        )
-
-    def val_dataloader(self, **kwargs):
-        return DataLoader(
-            self.val_set, 
-            batch_size=self.batch_size, 
-            shuffle=self.val_shuffle, 
-            num_workers=self.val_n_workers,
-            pin_memory=self.val_pin_memory,
-            **kwargs
-        )
-
-    def test_dataloader(self, **kwargs):
-        return DataLoader(
-            self.test_set, 
-            batch_size=self.batch_size, 
-            shuffle=self.test_shuffle, 
-            num_workers=self.test_n_workers,
-            pin_memory=self.test_pin_memory,
-            **kwargs
-        )
+    def _get_split_dataset(self, split):
+        if split == 'train':
+            return self.train_set
+        elif split == 'val':
+            return self.val_set
+        elif split == 'test':
+            return self.test_set
+        else:
+            raise ValueError("split must be 'train', 'val', or 'test'")
 
     def get_classwise_dataloader(self, n_samples_per_class=5, split='train', num_workers=2, **kwargs):
         """
         Fast version: Use underlying dataset targets to avoid loading images during sampling.
         """
-        if split == 'train':
-            dataset = self.train_set
-        elif split == 'val':
-            dataset = self.val_set
-        elif split == 'test':
-            dataset = self.test_set
-        else:
-            raise ValueError("split must be 'train', 'val', or 'test'")
+        dataset = self._get_split_dataset(split)
 
         # Access raw dataset
         if isinstance(dataset, torch.utils.data.Subset):
@@ -330,6 +259,23 @@ class CIFAR10DataModule(pl.LightningDataModule):
         subset = torch.utils.data.Subset(base_dataset, final_indices)
         return DataLoader(subset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers, **kwargs)
 
+
+class MNISTDataModule(BaseDataModule):
+    DatasetClass = MNIST
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.dataset_id = "mnist"
+        self.download_path = f"./temp/{self.dataset_id}"
+
+
+class CIFAR10DataModule(BaseDataModule):
+    DatasetClass = CIFAR10
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.dataset_id = "cifar10"
+        self.download_path = f"./temp/{self.dataset_id}"
 
 
 def create_data_module(config, **kwargs):
