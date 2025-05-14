@@ -121,13 +121,15 @@ class MNISTDataModule(pl.LightningDataModule):
         batch_size, 
         train_size, 
         seed, 
-        num_workers=2, 
         train_shuffle=True,
         train_pin_memory=True,
+        train_n_workers=2,
         val_shuffle=False,
         val_pin_memory=True,
+        val_n_workers=2,
         test_shuffle=False,
         test_pin_memory=False,
+        test_n_workers=2,
         augmentation_pipeline=[],
         pretrained_dataset_id=None
     ):
@@ -137,16 +139,19 @@ class MNISTDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.train_size = train_size
         self.seed = seed
-        self.num_workers = num_workers
         self.train_shuffle = train_shuffle
         self.train_pin_memory = train_pin_memory
+        self.train_n_workers = train_n_workers
         self.val_shuffle = val_shuffle
         self.val_pin_memory = val_pin_memory
+        self.val_n_workers = val_n_workers
         self.test_shuffle = test_shuffle
         self.test_pin_memory = test_pin_memory
+        self.test_n_workers = test_n_workers
         self.n_classes = 10
         self.augmentation_pipeline = augmentation_pipeline
         self.pretrained_dataset_id = pretrained_dataset_id
+        self.labels = None
 
     def prepare_data(self):
         MNIST(root=self.download_path, train=True, download=True)
@@ -157,6 +162,8 @@ class MNISTDataModule(pl.LightningDataModule):
         self.train_transform, self.test_transform = build_dataset_transforms(dataset_id, self.augmentation_pipeline)
 
         full = MNIST(root=self.download_path, train=True, transform=self.train_transform)
+        self.labels = list(full.classes)
+
         total = len(full)
         train_size = int(total * self.train_size)
         val_size = total - train_size
@@ -171,7 +178,7 @@ class MNISTDataModule(pl.LightningDataModule):
             self.train_set, 
             batch_size=self.batch_size, 
             shuffle=self.train_shuffle, 
-            num_workers=self.num_workers,
+            num_workers=self.train_n_workers,
             pin_memory=self.train_pin_memory
         )
 
@@ -180,7 +187,7 @@ class MNISTDataModule(pl.LightningDataModule):
             self.val_set, 
             batch_size=self.batch_size, 
             shuffle=self.val_shuffle, 
-            num_workers=self.num_workers,
+            num_workers=self.val_n_workers,
             pin_memory=self.val_pin_memory
         )
 
@@ -189,7 +196,7 @@ class MNISTDataModule(pl.LightningDataModule):
             self.test_set, 
             batch_size=self.batch_size, 
             shuffle=self.test_shuffle, 
-            num_workers=self.num_workers,
+            num_workers=self.test_n_workers,
             pin_memory=self.test_pin_memory
         )
     
@@ -200,13 +207,15 @@ class CIFAR10DataModule(pl.LightningDataModule):
         batch_size, 
         train_size, 
         seed, 
-        num_workers=2, 
         train_shuffle=True,
         train_pin_memory=True,
+        train_n_workers=2,
         val_shuffle=False,
         val_pin_memory=True,
+        val_n_workers=2,
         test_shuffle=False,
         test_pin_memory=False,
+        test_n_workers=2,
         augmentation_pipeline=[],
         pretrained_dataset_id=None
     ):
@@ -216,16 +225,19 @@ class CIFAR10DataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.train_size = train_size
         self.seed = seed
-        self.num_workers = num_workers
         self.train_shuffle = train_shuffle
         self.train_pin_memory = train_pin_memory
+        self.train_n_workers = train_n_workers
         self.val_shuffle = val_shuffle
         self.val_pin_memory = val_pin_memory
+        self.val_n_workers = val_n_workers
         self.test_shuffle = test_shuffle
         self.test_pin_memory = test_pin_memory
+        self.test_n_workers = test_n_workers
         self.n_classes = 10
         self.augmentation_pipeline = augmentation_pipeline
         self.pretrained_dataset_id = pretrained_dataset_id
+        self.labels = None
 
     def prepare_data(self):
         CIFAR10(root=self.download_path, train=True, download=True)
@@ -236,6 +248,8 @@ class CIFAR10DataModule(pl.LightningDataModule):
         self.train_transform, self.test_transform = build_dataset_transforms(dataset_id, self.augmentation_pipeline)
 
         full = CIFAR10(root=self.download_path, train=True, transform=self.train_transform)
+        self.labels = list(full.classes)
+
         total = len(full)
         train_size = int(total * self.train_size)
         val_size = total - train_size
@@ -250,7 +264,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
             self.train_set, 
             batch_size=self.batch_size, 
             shuffle=self.train_shuffle, 
-            num_workers=self.num_workers,
+            num_workers=self.train_n_workers,
             pin_memory=self.train_pin_memory
         )
 
@@ -259,7 +273,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
             self.val_set, 
             batch_size=self.batch_size, 
             shuffle=self.val_shuffle, 
-            num_workers=self.num_workers,
+            num_workers=self.val_n_workers,
             pin_memory=self.val_pin_memory
         )
 
@@ -268,7 +282,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
             self.test_set, 
             batch_size=self.batch_size, 
             shuffle=self.test_shuffle, 
-            num_workers=self.num_workers,
+            num_workers=self.test_n_workers,
             pin_memory=self.test_pin_memory
         )
 
