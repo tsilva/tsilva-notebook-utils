@@ -7,6 +7,8 @@ from torchvision.datasets import MNIST
 from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10
 from torch.utils.data import DataLoader
+from collections import defaultdict
+from torch.utils.data import Subset
 
 DATASET_SPECS = {
     "imagenet": {
@@ -289,6 +291,47 @@ class CIFAR10DataModule(pl.LightningDataModule):
             pin_memory=self.test_pin_memory,
             **kwargs
         )
+
+    def get_classwise_dataloader(self, n_samples_per_class=5, split='train', **kwargs):
+        """
+        Returns a DataLoader with n_samples_per_class from each class.
+        Args:
+            n_samples_per_class: Number of samples per class
+            split: 'train', 'val', or 'test'
+        """
+        if split == 'train':
+            dataset = self.train_set
+        elif split == 'val':
+            dataset = self.val_set
+        elif split == 'test':
+            dataset = self.test_set
+        else:
+            raise ValueError("split must be 'train', 'val', or 'test'")
+
+        # Access underlying dataset in case of Subset
+        if isinstance(dataset, torch.utils.data.Subset):
+            base_dataset = dataset.dataset
+            indices = dataset.indices
+        else:
+            base_dataset = dataset
+            indices = list(range(len(dataset)))
+
+        # Map class -> list of indices
+        class_to_indices = defaultdict(list)
+        for idx in indices:
+            _, label = base_dataset[idx]
+            if len(class_to_indices[label]) < n_samples_per_class:
+                class_to_indices[label].append(idx)
+
+        # Flatten collected indices
+        collected_indices = []
+        for cls, idxs in class_to_indices.items():
+            if len(idxs) < n_samples_per_class:
+                print(f"Warning: Only found {len(idxs)} samples for class {cls}")
+            collected_indices.extend(idxs)
+
+        subset = Subset(base_dataset, collected_indices)
+        return DataLoader(subset, batch_size=self.batch_size, shuffle=False, **kwargs)
 
 
 def create_data_module(config, **kwargs):
