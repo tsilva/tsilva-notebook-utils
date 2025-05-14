@@ -171,34 +171,37 @@ class MNISTDataModule(pl.LightningDataModule):
         )
         self.val_set.dataset.transform = self.test_transform
         self.test_set = MNIST(root=self.download_path, train=False, transform=self.test_transform)
-        
-    def train_dataloader(self):
+
+    def train_dataloader(self, **kwargs):
         return DataLoader(
             self.train_set, 
             batch_size=self.batch_size, 
             shuffle=self.train_shuffle, 
             num_workers=self.train_n_workers,
-            pin_memory=self.train_pin_memory
+            pin_memory=self.train_pin_memory,
+            **kwargs
         )
 
-    def val_dataloader(self):
+    def val_dataloader(self, **kwargs):
         return DataLoader(
             self.val_set, 
             batch_size=self.batch_size, 
             shuffle=self.val_shuffle, 
             num_workers=self.val_n_workers,
-            pin_memory=self.val_pin_memory
+            pin_memory=self.val_pin_memory,
+            **kwargs
         )
 
-    def test_dataloader(self):
+    def test_dataloader(self, **kwargs):
         return DataLoader(
             self.test_set, 
             batch_size=self.batch_size, 
             shuffle=self.test_shuffle, 
             num_workers=self.test_n_workers,
-            pin_memory=self.test_pin_memory
+            pin_memory=self.test_pin_memory,
+            **kwargs
         )
-    
+
 
 class CIFAR10DataModule(pl.LightningDataModule):
     def __init__(
@@ -257,31 +260,34 @@ class CIFAR10DataModule(pl.LightningDataModule):
         self.val_set.dataset.transform = self.test_transform
         self.test_set = CIFAR10(root=self.download_path, train=False, transform=self.test_transform)
 
-    def train_dataloader(self):
+    def train_dataloader(self, **kwargs):
         return DataLoader(
             self.train_set, 
             batch_size=self.batch_size, 
             shuffle=self.train_shuffle, 
             num_workers=self.train_n_workers,
-            pin_memory=self.train_pin_memory
+            pin_memory=self.train_pin_memory,
+            **kwargs
         )
 
-    def val_dataloader(self):
+    def val_dataloader(self, **kwargs):
         return DataLoader(
             self.val_set, 
             batch_size=self.batch_size, 
             shuffle=self.val_shuffle, 
             num_workers=self.val_n_workers,
-            pin_memory=self.val_pin_memory
+            pin_memory=self.val_pin_memory,
+            **kwargs
         )
 
-    def test_dataloader(self):
+    def test_dataloader(self, **kwargs):
         return DataLoader(
             self.test_set, 
             batch_size=self.batch_size, 
             shuffle=self.test_shuffle, 
             num_workers=self.test_n_workers,
-            pin_memory=self.test_pin_memory
+            pin_memory=self.test_pin_memory,
+            **kwargs
         )
 
 
