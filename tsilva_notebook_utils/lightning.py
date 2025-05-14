@@ -304,8 +304,8 @@ def create_data_module(config, **kwargs):
         "seed": config['seed'],
         "batch_size": config['batch_size'],
         "train_size": config['train_size'],
-        "augmentation_pipeline": config['augmentation_pipeline'],
-        "pretrained_dataset_id": config['pretrained_dataset_id'],
+        "augmentation_pipeline": config.get('augmentation_pipeline', []),
+        "pretrained_dataset_id": config.get('pretrained_dataset_id', None)
         **kwargs
     })
     datamodule.prepare_data()
