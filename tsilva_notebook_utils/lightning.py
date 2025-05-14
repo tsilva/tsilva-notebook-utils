@@ -148,10 +148,9 @@ class MNISTDataModule(pl.LightningDataModule):
         self.test_shuffle = test_shuffle
         self.test_pin_memory = test_pin_memory
         self.test_n_workers = test_n_workers
-        self.n_classes = 10
         self.augmentation_pipeline = augmentation_pipeline
         self.pretrained_dataset_id = pretrained_dataset_id
-        self.labels = None
+        self.class_names = None
 
     def prepare_data(self):
         MNIST(root=self.download_path, train=True, download=True)
@@ -162,7 +161,7 @@ class MNISTDataModule(pl.LightningDataModule):
         self.train_transform, self.test_transform = build_dataset_transforms(dataset_id, self.augmentation_pipeline)
 
         full = MNIST(root=self.download_path, train=True, transform=self.train_transform)
-        self.labels = list(full.classes)
+        self.class_names = list(full.classes)
 
         total = len(full)
         train_size = int(total * self.train_size)
@@ -234,10 +233,9 @@ class CIFAR10DataModule(pl.LightningDataModule):
         self.test_shuffle = test_shuffle
         self.test_pin_memory = test_pin_memory
         self.test_n_workers = test_n_workers
-        self.n_classes = 10
         self.augmentation_pipeline = augmentation_pipeline
         self.pretrained_dataset_id = pretrained_dataset_id
-        self.labels = None
+        self.class_names = None
 
     def prepare_data(self):
         CIFAR10(root=self.download_path, train=True, download=True)
@@ -248,7 +246,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
         self.train_transform, self.test_transform = build_dataset_transforms(dataset_id, self.augmentation_pipeline)
 
         full = CIFAR10(root=self.download_path, train=True, transform=self.train_transform)
-        self.labels = list(full.classes)
+        self.class_names = list(full.classes)
 
         total = len(full)
         train_size = int(total * self.train_size)
