@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from typing import Union
 import pytorch_lightning as pl
+import matplotlib.pyplot as plt
 from torchvision import transforms
 from torchvision.datasets import MNIST
 from torchvision.datasets import CIFAR10
@@ -86,7 +87,6 @@ def build_dataset_transforms(dataset_id: str, augmentation_pipeline: list = [], 
     
     dataset_spec = DATASET_SPECS[dataset_id]
     pretrained_dataset_spec = DATASET_SPECS.get(pretrained_dataset_id, dataset_spec)
-    print(pretrained_dataset_id)
 
     dataset_image_size = dataset_spec["image_size"]
     pretrained_image_dataset_size = pretrained_dataset_spec["image_size"]
@@ -263,16 +263,17 @@ class BaseDataModule(pl.LightningDataModule):
         return DataLoader(subset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers, **kwargs)
 
     class _NoAugmentations:
-        def __init__(self, outer):
+        def __init__(self, outer, filter=None):
             self.outer = outer
+            self.filter = filter
             self.prev_train_transform = None
             self.prev_test_transform = None
 
         def __enter__(self):
             self.prev_train_transform = self.outer._train_transform
             self.prev_test_transform = self.outer._test_transform
-            self.outer._train_transform = transforms.ToTensor()
-            self.outer._test_transform = transforms.ToTensor()
+            self.outer._train_transform = transforms.Compose([x for x in self.outer._train_transform.transforms if self.filter(x)]) if self.filter else transforms.ToTensor()
+            self.outer._test_transform = transforms.Compose([x for x in self.outer._test_transform.transforms if self.filter(x)]) if self.filter else transforms.ToTensor()
 
         def __exit__(self, exc_type, exc_val, exc_tb):
             self.outer._train_transform = self.prev_train_transform
@@ -280,8 +281,8 @@ class BaseDataModule(pl.LightningDataModule):
             self.prev_train_transform = None
             self.prev_test_transform = None
 
-    def no_augmentations(self):
-        return self._NoAugmentations(self)
+    def no_augmentations(self, *args, **kwargs):
+        return self._NoAugmentations(self, *args, **kwargs)
 
 
 class MNISTDataModule(BaseDataModule):
@@ -321,3 +322,79 @@ def create_data_module(config, **kwargs):
     })
     datamodule.prepare_data()
     return datamodule
+
+
+def render_samples_per_class(dm, n_samples=5, split='train'):
+    """
+    Show `n_samples` random images for each class from a classification dataset,
+    using class-wise sampling.
+
+    Args:
+        dm: A Lightning DataModule with train/val/test dataloaders and:
+            - .class_names: list of class names
+            - .mean and .std: for unnormalizing images (optional)
+            - .get_classwise_dataloader(n_samples_per_class, split): custom method
+        n_samples: Number of images per class to show
+        split: 'train', 'val', or 'test'
+    """
+    # Get class names
+    class_names = getattr(dm, 'class_names', None)
+    if class_names is None:
+        raise ValueError("DataModule must define `class_names` for this function to work.")
+    n_classes = len(class_names)
+
+    # Use classwise dataloader
+    loader = dm.get_classwise_dataloader(n_samples_per_class=n_samples, split=split, num_workers=4)
+
+    # Collect samples
+    images_per_class = {i: [] for i in range(n_classes)}
+    for batch in loader:
+        x, y = batch
+        for img, label in zip(x, y):
+            label = int(label)
+            if len(images_per_class[label]) < n_samples:
+                images_per_class[label].append(img)
+
+    # Plotting
+    fig, axes = plt.subplots(n_classes, n_samples, figsize=(n_samples * 2, n_classes * 2))
+
+    for class_idx in range(n_classes):
+        for j in range(n_samples):
+            ax = axes[class_idx, j] if n_classes > 1 else axes[j]
+            if len(images_per_class[class_idx]) <= j:
+                ax.axis('off')
+                continue
+
+            img = images_per_class[class_idx][j]
+            img = img.permute(1, 2, 0).cpu().numpy()
+            img = np.clip(img, 0, 1)
+
+            ax.imshow(img, interpolation='nearest')
+
+            # Dynamically compute tick locations based on image size
+            height, width = img.shape[:2]
+            tick_step = max(1, width // 8)
+            xticks = np.arange(0, width + 1, tick_step)
+            yticks = np.arange(0, height + 1, tick_step)
+
+            ax.set_xticks(xticks)
+            ax.set_yticks(yticks)
+
+            # Y tick labels always
+            ax.set_yticklabels([str(t) for t in yticks])
+
+            # X tick labels only on last row
+            if class_idx == n_classes - 1:
+                ax.set_xticklabels([str(t) for t in xticks])
+
+            ax.tick_params(labelsize=6)
+            ax.grid(color='gray', linestyle='--', linewidth=0.5)
+
+            # Left column: class name
+            if j == 0:
+                ax.set_ylabel(class_names[class_idx], fontsize=10, rotation=90, labelpad=10)
+            else:
+                ax.set_yticklabels([])
+
+    plt.tight_layout()
+    return plt
