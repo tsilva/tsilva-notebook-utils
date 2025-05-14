@@ -81,18 +81,25 @@ class BackboneWarmupCallback(pl.Callback):
             self.unfrozen = True
 
 
-def build_dataset_transforms(dataset_id: str, augmentation_pipeline: list = []):
+def build_dataset_transforms(dataset_id: str, augmentation_pipeline: list = [], pretrained_dataset_id: str = None) -> tuple:
     assert dataset_id in DATASET_SPECS, f"Unknown dataset spec: {dataset_id}"
-    spec = DATASET_SPECS[dataset_id]
+    
+    dataset_spec = DATASET_SPECS[dataset_id]
+    pretrained_dataset_spec = DATASET_SPECS.get(pretrained_dataset_id, dataset_spec)
+    print(pretrained_dataset_id)
 
-    image_size = spec["image_size"]
-    crop_fraction = 0.875
-    resize_size = int(round(image_size / crop_fraction))
+    dataset_image_size = dataset_spec["image_size"]
+    pretrained_image_dataset_size = pretrained_dataset_spec["image_size"]
+    assert dataset_image_size <= pretrained_image_dataset_size, f"Dataset size {dataset_image_size} must be less than or equal to pretrained dataset size {pretrained_image_dataset_size}"
 
-    preprocessing_pipeline = [
-        transforms.Resize(resize_size),
-        transforms.CenterCrop(image_size)
-    ]
+    preprocessing_pipeline = []
+    if dataset_image_size < pretrained_image_dataset_size:
+        crop_fraction = 0.875
+        resize_size = int(round(pretrained_image_dataset_size / crop_fraction))
+        preprocessing_pipeline = [
+            transforms.Resize(resize_size),
+            transforms.CenterCrop(pretrained_image_dataset_size)
+        ]
     
     _augmentation_pipeline = []
     for name, args, kwargs in augmentation_pipeline:
@@ -102,17 +109,14 @@ def build_dataset_transforms(dataset_id: str, augmentation_pipeline: list = []):
 
     normalization_pipeline = [
         transforms.ToTensor(),
-        transforms.Normalize(mean=spec["mean"], std=spec["std"]),
+        transforms.Normalize(mean=pretrained_dataset_spec["mean"], std=pretrained_dataset_spec["std"])
     ]
-
-    train_transform = transforms.Compose(
+        
+    transform = transforms.Compose(
         preprocessing_pipeline + _augmentation_pipeline + normalization_pipeline
     )
-    test_transform = transforms.Compose(
-        preprocessing_pipeline + normalization_pipeline
-    )
 
-    return train_transform, test_transform
+    return transform
 
 
 class BaseDataModule(pl.LightningDataModule):
@@ -158,17 +162,21 @@ class BaseDataModule(pl.LightningDataModule):
         self.augmentation_pipeline = augmentation_pipeline
         self.pretrained_dataset_id = pretrained_dataset_id
         self.class_names = None
+        
+        self._train_transform = build_dataset_transforms(self.dataset_id, self.augmentation_pipeline, pretrained_dataset_id=self.pretrained_dataset_id)
+        self._test_transform = build_dataset_transforms(self.dataset_id, [], pretrained_dataset_id=self.pretrained_dataset_id)
+        self.transforms = {
+            "train": lambda *args, **kwargs: self._train_transform(*args, **kwargs),
+            "test": lambda *args, **kwargs: self._test_transform(*args, **kwargs)
+        }
 
     def prepare_data(self):
         self.DatasetClass(root=self.download_path, train=True, download=True)
         self.DatasetClass(root=self.download_path, train=False, download=True)
 
     def setup(self, stage=None):
-        dataset_id = self.pretrained_dataset_id if self.pretrained_dataset_id else self.dataset_id
-        self.train_transform, self.test_transform = build_dataset_transforms(dataset_id, self.augmentation_pipeline)
-
         if stage is None or stage == "fit":
-            full = self.DatasetClass(root=self.download_path, train=True, transform=self.train_transform)
+            full = self.DatasetClass(root=self.download_path, train=True, transform=self.transforms['train'])
             self.class_names = list(full.classes)
             total = len(full)
             train_size = int(total * self.train_size)
@@ -176,10 +184,10 @@ class BaseDataModule(pl.LightningDataModule):
             self.train_set, self.val_set = torch.utils.data.random_split(
                 full, [train_size, val_size], generator=torch.Generator().manual_seed(self.seed)
             )
-            self.val_set.dataset.transform = self.test_transform
+            self.val_set.dataset.transform = self.transforms['test']
 
         if stage is None or stage == "test":
-            self.test_set = self.DatasetClass(root=self.download_path, train=False, transform=self.test_transform)
+            self.test_set = self.DatasetClass(root=self.download_path, train=False, transform=self.transforms['test'])
 
     def _get_split_arg(self, split, arg_name):
         base = getattr(self, f"base_{arg_name}")
@@ -259,6 +267,27 @@ class BaseDataModule(pl.LightningDataModule):
         subset = torch.utils.data.Subset(base_dataset, final_indices)
         return DataLoader(subset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers, **kwargs)
 
+    class _NoAugmentations:
+        def __init__(self, outer):
+            self.outer = outer
+            self.prev_train_transform = None
+            self.prev_test_transform = None
+
+        def __enter__(self):
+            self.prev_train_transform = self.outer._train_transform
+            self.prev_test_transform = self.outer._test_transform
+            self.outer._train_transform = transforms.ToTensor()
+            self.outer._test_transform = transforms.ToTensor()
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            self.outer._train_transform = self.prev_train_transform
+            self.outer._test_transform = self.prev_test_transform
+            self.prev_train_transform = None
+            self.prev_test_transform = None
+
+    def no_augmentations(self):
+        return self._NoAugmentations(self)
+
 
 class MNISTDataModule(BaseDataModule):
     DatasetClass = MNIST
@@ -297,4 +326,3 @@ def create_data_module(config, **kwargs):
     })
     datamodule.prepare_data()
     return datamodule
-
