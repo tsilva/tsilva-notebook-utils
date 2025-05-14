@@ -292,12 +292,9 @@ class CIFAR10DataModule(pl.LightningDataModule):
             **kwargs
         )
 
-    def get_classwise_dataloader(self, n_samples_per_class=5, split='train', **kwargs):
+    def get_classwise_dataloader(self, n_samples_per_class=5, split='train', num_workers=2, **kwargs):
         """
-        Returns a DataLoader with n_samples_per_class from each class.
-        Args:
-            n_samples_per_class: Number of samples per class
-            split: 'train', 'val', or 'test'
+        Fast version: Use underlying dataset targets to avoid loading images during sampling.
         """
         if split == 'train':
             dataset = self.train_set
@@ -308,30 +305,33 @@ class CIFAR10DataModule(pl.LightningDataModule):
         else:
             raise ValueError("split must be 'train', 'val', or 'test'")
 
-        # Access underlying dataset in case of Subset
+        # Access raw dataset
         if isinstance(dataset, torch.utils.data.Subset):
             base_dataset = dataset.dataset
-            indices = dataset.indices
+            subset_indices = dataset.indices
         else:
             base_dataset = dataset
-            indices = list(range(len(dataset)))
+            subset_indices = list(range(len(dataset)))
 
-        # Map class -> list of indices
-        class_to_indices = defaultdict(list)
-        for idx in indices:
-            _, label = base_dataset[idx]
+        # Try to use the raw targets without loading each item
+        targets = (
+            np.array(base_dataset.targets)
+            if hasattr(base_dataset, 'targets')
+            else np.array([base_dataset[i][1] for i in range(len(base_dataset))])  # fallback
+        )
+
+        class_to_indices = {i: [] for i in range(len(self.class_names))}
+        for idx in subset_indices:
+            label = targets[idx]
             if len(class_to_indices[label]) < n_samples_per_class:
                 class_to_indices[label].append(idx)
+            if all(len(v) >= n_samples_per_class for v in class_to_indices.values()):
+                break
 
-        # Flatten collected indices
-        collected_indices = []
-        for cls, idxs in class_to_indices.items():
-            if len(idxs) < n_samples_per_class:
-                print(f"Warning: Only found {len(idxs)} samples for class {cls}")
-            collected_indices.extend(idxs)
+        final_indices = [i for indices in class_to_indices.values() for i in indices]
+        subset = torch.utils.data.Subset(base_dataset, final_indices)
+        return DataLoader(subset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers, **kwargs)
 
-        subset = Subset(base_dataset, collected_indices)
-        return DataLoader(subset, batch_size=self.batch_size, shuffle=False, **kwargs)
 
 
 def create_data_module(config, **kwargs):
