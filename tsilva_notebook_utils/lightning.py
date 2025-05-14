@@ -189,18 +189,13 @@ class BaseDataModule(pl.LightningDataModule):
         if stage is None or stage == "test":
             self.test_set = self.DatasetClass(root=self.download_path, train=False, transform=self.transforms['test'])
 
-    def _get_split_arg(self, split, arg_name):
-        base = getattr(self, f"base_{arg_name}")
-        split_val = getattr(self, f"{split}_{arg_name}")
-        return base if split_val is None else split_val
-
     def train_dataloader(self, **kwargs):
         return DataLoader(
             self.train_set, 
             batch_size=self.batch_size, 
-            shuffle=self._get_split_arg("train", "shuffle"), 
-            num_workers=self._get_split_arg("train", "n_workers"),
-            pin_memory=self._get_split_arg("train", "pin_memory"),
+            shuffle=self.train_shuffle, 
+            num_workers=self.train_n_workers,
+            pin_memory=self.train_pin_memory
             **kwargs
         )
 
@@ -208,9 +203,9 @@ class BaseDataModule(pl.LightningDataModule):
         return DataLoader(
             self.val_set, 
             batch_size=self.batch_size, 
-            shuffle=self._get_split_arg("val", "shuffle"), 
-            num_workers=self._get_split_arg("val", "n_workers"),
-            pin_memory=self._get_split_arg("val", "pin_memory"),
+            shuffle=self.val_shuffle, 
+            num_workers=self.val_n_workers,
+            pin_memory=self.val_pin_memory
             **kwargs
         )
 
@@ -218,9 +213,9 @@ class BaseDataModule(pl.LightningDataModule):
         return DataLoader(
             self.test_set, 
             batch_size=self.batch_size, 
-            shuffle=self._get_split_arg("test", "shuffle"), 
-            num_workers=self._get_split_arg("test", "n_workers"),
-            pin_memory=self._get_split_arg("test", "pin_memory"),
+            shuffle=self.test_shuffle, 
+            num_workers=self.test_n_workers,
+            pin_memory=self.test_pin_memory
             **kwargs
         )
 
