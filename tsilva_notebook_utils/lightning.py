@@ -362,7 +362,7 @@ class BaseDataModule(pl.LightningDataModule):
         skip_normalize_fn=lambda x: x if not isinstance(x, v2.Normalize) else None
         with self.no_augmentations(filter=skip_normalize_fn):
             dataloader_fn = getattr(self, f"{split}_dataloader")
-            dataloader = dataloader_fn(batch_size=n_samples, shuffle=shuffle)
+            dataloader = dataloader_fn()
             repeated_dataloader = self.repeated_dataloader(dataloader, n_samples=n_samples, shuffle=shuffle)
             return repeated_dataloader.render_video(fps=fps, scale=scale)
 
