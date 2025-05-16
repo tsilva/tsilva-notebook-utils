@@ -185,7 +185,6 @@ class RepeatedImageDataset(torch.utils.data.Dataset):
         return self.n_samples
 
     def __getitem__(self, idx):
-        print(idx)
         image = self.base_dataset[self.index]
         return image
 
@@ -492,3 +491,8 @@ def render_samples_per_class(dm, n_samples=5, split='train'):
 
     plt.tight_layout()
     return plt
+
+
+def seed_everything(*args, **kwargs):
+    import pytorch_lightning as pl
+    return pl.seed_everything(*args, **kwargs)

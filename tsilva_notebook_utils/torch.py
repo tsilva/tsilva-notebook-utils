@@ -199,3 +199,16 @@ def get_conv_filter_images(model, nrow=8, padding=1, scale=4):
             
     return filter_images
 
+
+def configure_matmul_precision():
+    if torch.cuda.is_available():
+        # Get compute capability of the current CUDA device
+        major, minor = torch.cuda.get_device_capability()
+        # TF32 is available on Ampere (compute capability >= 8.0)
+        if major >= 8:
+            torch.set_float32_matmul_precision('high')
+            print("TF32 matmul precision set to 'high'")
+        else:
+            print("TF32 not supported on this GPU, skipping matmul precision setting")
+    else:
+        print("CUDA not available, matmul precision setting skipped")

@@ -1,3 +1,8 @@
+def login(*args, **kwargs):
+    import wandb
+    return wandb.login(*args, **kwargs)
+    
+
 def render_run_iframe():
     import wandb
     from IPython.display import HTML
