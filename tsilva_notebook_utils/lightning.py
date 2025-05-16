@@ -415,7 +415,7 @@ def create_data_module(config, **kwargs):
     assert datamodule_class is not None, f"Unsupported dataset: {dataset_id}"
     datamodule = datamodule_class(**{
         "seed": config['seed'],
-        "batch_size": 1,#config['batch_size'],
+        "batch_size": config['batch_size'],
         "train_size": config['train_size'],
         "augmentation_pipeline": config.get('augmentation_pipeline', []),
         "pretrained_dataset_id": config.get('pretrained_dataset_id', None),
