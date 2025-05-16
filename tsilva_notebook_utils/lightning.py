@@ -155,7 +155,7 @@ def create_dataset_transforms(
 
 class ImageDataLoader(DataLoader):
 
-    def render_video(self, n_batches=1, n_images=None, fps=2, scale=4):
+    def render_video(self, n_batches=1, n_images=None, **kwargs):
         import tempfile
 
         images = []
@@ -167,14 +167,9 @@ class ImageDataLoader(DataLoader):
                 images = images[:n_images]
                 break
 
-            
-           # img = img.permute(1, 2, 0).cpu().numpy()
-            #img = np.clip(img, 0, 1)
-        #images = [img.permute(1, 2, 0).cpu().numpy() for img in images]
-
         with tempfile.TemporaryDirectory() as temp_dir:
             save_tensor_frames(images, temp_dir)
-            return create_video_from_frames(temp_dir, fps=fps, scale=scale)
+            return create_video_from_frames(temp_dir, **kwargs)
 
 
 class RepeatedImageDataset(torch.utils.data.Dataset):
