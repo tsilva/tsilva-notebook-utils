@@ -4,7 +4,6 @@ import cv2
 import base64
 import torch
 import tempfile
-from collections.abc import Iterable
 from torchvision.transforms import ToPILImage
 from IPython.display import HTML
 import imageio_ffmpeg as ffmpeg

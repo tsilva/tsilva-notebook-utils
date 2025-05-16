@@ -1,13 +1,16 @@
+import os
 import time
 import torch
 import numpy as np
 from typing import Union
 import pytorch_lightning as pl
 import matplotlib.pyplot as plt
-from torchvision import transforms
 from torchvision.datasets import MNIST
 from torchvision.datasets import CIFAR10
 from torch.utils.data import DataLoader
+from torchvision.transforms import v2
+from torchvision.transforms import ToPILImage
+from tsilva_notebook_utils.video import save_tensor_frames, create_video_from_frames
 
 DATASET_SPECS = {
     "imagenet": {
@@ -82,9 +85,34 @@ class BackboneWarmupCallback(pl.Callback):
             self.unfrozen = True
 
 
-def build_dataset_transforms(dataset_id: str, augmentation_pipeline: list = [], pretrained_dataset_id: str = None) -> tuple:
+def create_transforms(transforms_spec, compose=True):
+    _transforms = []
+    for name, args, kwargs in transforms_spec:
+        _kwargs = kwargs.copy()
+        _class = getattr(v2, name)
+        if name == "ToDtype": _kwargs["dtype"] = getattr(torch, _kwargs["dtype"])
+        transform_fn = _class(*args, **_kwargs)
+        _transforms.append(transform_fn)
+    return v2.Compose(_transforms) if compose else _transforms
+
+
+def assert_transforms_in_device(transforms, device):
+    img = torch.randint(0, 256, (3, 32, 32), dtype=torch.uint8, device=device)
+    for t in transforms.transforms:
+        out = t(img)
+        name = t.__class__.__name__
+        print(f"{name:<25} | Output device: {out.device}")
+        assert out.device == device, f"{name}: expected device {device}, but got {out.device}"
+        img = out
+
+
+def create_dataset_transforms(
+    dataset_id: str, 
+    augmentation_pipeline: list = [], 
+    pretrained_dataset_id: str = None
+) -> tuple:
+    # Retrieve dataset specs
     assert dataset_id in DATASET_SPECS, f"Unknown dataset spec: {dataset_id}"
-    
     dataset_spec = DATASET_SPECS[dataset_id]
     pretrained_dataset_spec = DATASET_SPECS.get(pretrained_dataset_id, dataset_spec)
 
@@ -92,31 +120,74 @@ def build_dataset_transforms(dataset_id: str, augmentation_pipeline: list = [], 
     pretrained_image_dataset_size = pretrained_dataset_spec["image_size"]
     assert dataset_image_size <= pretrained_image_dataset_size, f"Dataset size {dataset_image_size} must be less than or equal to pretrained dataset size {pretrained_image_dataset_size}"
 
-    preprocessing_pipeline = []
+    # Ensure image is tensor
+    transforms = [
+        v2.ToImage(),
+        v2.ToDtype(torch.uint8, scale=True)
+    ]
+
+    # Resize image to match pretrained dataset size
     if dataset_image_size < pretrained_image_dataset_size:
         crop_fraction = 0.875
         resize_size = int(round(pretrained_image_dataset_size / crop_fraction))
-        preprocessing_pipeline = [
-            transforms.Resize(resize_size),
-            transforms.CenterCrop(pretrained_image_dataset_size)
-        ]
-    
-    _augmentation_pipeline = []
-    for name, args, kwargs in augmentation_pipeline:
-        _class = getattr(transforms, name, None)
-        augmentation_fn = _class(*args, **kwargs)
-        _augmentation_pipeline.append(augmentation_fn)
+        transforms.extend([
+            v2.Resize(resize_size),
+            v2.CenterCrop(pretrained_image_dataset_size)
+        ])
 
-    normalization_pipeline = [
-        transforms.ToTensor(),
-        transforms.Normalize(mean=pretrained_dataset_spec["mean"], std=pretrained_dataset_spec["std"])
-    ]
-        
-    transform = transforms.Compose(
-        preprocessing_pipeline + _augmentation_pipeline + normalization_pipeline
+    # Add augmentation pipeline
+    transforms.extend(
+        create_transforms(augmentation_pipeline, compose=False)
     )
 
+    # Normalize tensor to dataset statistics
+    transforms.extend([
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=pretrained_dataset_spec["mean"], std=pretrained_dataset_spec["std"])
+    ])
+
+    # Return composed transforms
+    transform = v2.Compose(transforms)
     return transform
+
+
+class ImageDataLoader(DataLoader):
+
+    def render_video(self, n_batches=1, n_images=None, fps=2, scale=4):
+        import tempfile
+
+        images = []
+        for _ in range(n_batches):
+            batch = next(iter(self))
+            x, _ = batch
+            images.extend(x.unbind(0))
+            if n_images and len(images) >= n_images:
+                images = images[:n_images]
+                break
+
+            
+           # img = img.permute(1, 2, 0).cpu().numpy()
+            #img = np.clip(img, 0, 1)
+        #images = [img.permute(1, 2, 0).cpu().numpy() for img in images]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            save_tensor_frames(images, temp_dir)
+            return create_video_from_frames(temp_dir, fps=fps, scale=scale)
+
+
+class RepeatedImageDataset(torch.utils.data.Dataset):
+    def __init__(self, base_dataset, index, n_samples):
+        self.base_dataset = base_dataset
+        self.index = index
+        self.n_samples = n_samples
+
+    def __len__(self):
+        return self.n_samples
+
+    def __getitem__(self, idx):
+        print(idx)
+        image = self.base_dataset[self.index]
+        return image
 
 
 class BaseDataModule(pl.LightningDataModule):
@@ -127,108 +198,135 @@ class BaseDataModule(pl.LightningDataModule):
         batch_size, 
         train_size, 
         seed, 
+
         train_shuffle=True,
         train_pin_memory=True,
-        train_n_workers=2,
+        train_n_workers=8,
+        train_persistent_workers=True,
+        
         val_shuffle=False,
         val_pin_memory=True,
-        val_n_workers=2,
+        val_n_workers=4,
+        val_persistent_workers=False,
+
         test_shuffle=False,
         test_pin_memory=False,
         test_n_workers=2,
+        test_persistent_workers=False,
+
         augmentation_pipeline=[],
         pretrained_dataset_id=None
     ):
         super().__init__()
         assert self.DatasetClass is not None, "DatasetClass must be set in subclass"
-        self.dataset_id = self.DatasetClass.__name__.lower().replace("dataset", "")
-        self.download_path = f"./temp/{self.dataset_id}"
+    
+        self.class_names = None
+        
         self.batch_size = batch_size
         self.train_size = train_size
         self.seed = seed
-        
-        # Split-specific args (default to base if None)
+
         self.train_shuffle = train_shuffle
         self.train_pin_memory = train_pin_memory
         self.train_n_workers = train_n_workers
-        # Set val/test shuffle default to False if not provided
-        self.val_shuffle = False if val_shuffle is None else val_shuffle
+        self.train_persistent_workers = train_persistent_workers
+        
+        self.val_shuffle = val_shuffle
         self.val_pin_memory = val_pin_memory
         self.val_n_workers = val_n_workers
-        self.test_shuffle = False if test_shuffle is None else test_shuffle
+        self.val_persistent_workers = val_persistent_workers
+
+        self.test_shuffle = test_shuffle
         self.test_pin_memory = test_pin_memory
         self.test_n_workers = test_n_workers
+        self.test_persistent_workers = test_persistent_workers
 
         self.augmentation_pipeline = augmentation_pipeline
         self.pretrained_dataset_id = pretrained_dataset_id
         self.class_names = None
         
-        self._train_transform = build_dataset_transforms(self.dataset_id, self.augmentation_pipeline, pretrained_dataset_id=self.pretrained_dataset_id)
-        self._test_transform = build_dataset_transforms(self.dataset_id, [], pretrained_dataset_id=self.pretrained_dataset_id)
+        self._train_transform = create_dataset_transforms(self.dataset_id, self.augmentation_pipeline, pretrained_dataset_id=self.pretrained_dataset_id)
+        self._val_transform = create_dataset_transforms(self.dataset_id, [], pretrained_dataset_id=self.pretrained_dataset_id)
+        self._test_transform = create_dataset_transforms(self.dataset_id, [], pretrained_dataset_id=self.pretrained_dataset_id)
         self.transforms = {
-            "train": lambda *args, **kwargs: self._train_transform(*args, **kwargs),
-            "test": lambda *args, **kwargs: self._test_transform(*args, **kwargs)
+            "train": lambda x: self._train_transform(x),
+            "val" : lambda x: self._val_transform(x),
+            "test": lambda x: self._test_transform(x)
         }
-
+    
+    @property
+    def dataset_id(self):
+        return self.DatasetClass.__name__.lower()
+    
+    @property
+    def download_path(self):
+        return f"./temp/{self.dataset_id}"
+    
     def prepare_data(self):
         self.DatasetClass(root=self.download_path, train=True, download=True)
         self.DatasetClass(root=self.download_path, train=False, download=True)
 
     def setup(self, stage=None):
         if stage is None or stage == "fit":
-            full = self.DatasetClass(root=self.download_path, train=True, transform=self.transforms['train'])
-            self.class_names = list(full.classes)
-            total = len(full)
+            self.full = self.DatasetClass(root=self.download_path, train=True, transform=self.transforms["train"])
+            self.class_names = list(self.full.classes)
+
+            total = len(self.full)
             train_size = int(total * self.train_size)
             val_size = total - train_size
             self.train_set, self.val_set = torch.utils.data.random_split(
-                full, [train_size, val_size], generator=torch.Generator().manual_seed(self.seed)
+                self.full, [train_size, val_size], generator=torch.Generator().manual_seed(self.seed)
             )
-            self.val_set.dataset.transform = self.transforms['test']
+
+            self.train_set.transform = self.transforms["train"]
+            self.val_set.transform = self.transforms["val"]
 
         if stage is None or stage == "test":
-            self.test_set = self.DatasetClass(root=self.download_path, train=False, transform=self.transforms['test'])
+            self.test_set = self.DatasetClass(root=self.download_path, train=False, transform=self.transforms["test"])
 
     def train_dataloader(self, **kwargs):
-        return DataLoader(
+        return ImageDataLoader(
             self.train_set, 
             batch_size=self.batch_size, 
-            shuffle=self.train_shuffle, 
+            shuffle=False, 
             num_workers=self.train_n_workers,
+            persistent_workers=self.train_persistent_workers,
             pin_memory=self.train_pin_memory,
             **kwargs
         )
 
     def val_dataloader(self, **kwargs):
-        return DataLoader(
+        return ImageDataLoader(
             self.val_set, 
             batch_size=self.batch_size, 
             shuffle=self.val_shuffle, 
             num_workers=self.val_n_workers,
             pin_memory=self.val_pin_memory,
+            persistent_workers=self.val_persistent_workers,
             **kwargs
         )
 
     def test_dataloader(self, **kwargs):
-        return DataLoader(
+        return ImageDataLoader(
             self.test_set, 
             batch_size=self.batch_size, 
             shuffle=self.test_shuffle, 
             num_workers=self.test_n_workers,
             pin_memory=self.test_pin_memory,
+            persistent_workers=self.test_persistent_workers,
+            **kwargs
+        )
+    
+    def repeated_dataloader(self, dataloader, n_samples=10, **kwargs):
+        return ImageDataLoader(
+            RepeatedImageDataset(dataloader.dataset, 0, n_samples), 
+            batch_size=n_samples,
             **kwargs
         )
 
     def _get_split_dataset(self, split):
-        if split == 'train':
-            return self.train_set
-        elif split == 'val':
-            return self.val_set
-        elif split == 'test':
-            return self.test_set
-        else:
-            raise ValueError("split must be 'train', 'val', or 'test'")
-
+        return getattr(self, f"{split}_set")
+    
     def get_classwise_dataloader(self, n_samples_per_class=5, split='train', num_workers=2, **kwargs):
         """
         Fast version: Use underlying dataset targets to avoid loading images during sampling.
@@ -251,6 +349,7 @@ class BaseDataModule(pl.LightningDataModule):
         )
 
         class_to_indices = {i: [] for i in range(len(self.class_names))}
+        shuffle_indices = np.random.permutation(len(subset_indices))
         for idx in subset_indices:
             label = targets[idx]
             if len(class_to_indices[label]) < n_samples_per_class:
@@ -267,18 +366,24 @@ class BaseDataModule(pl.LightningDataModule):
             self.outer = outer
             self.filter = filter
             self.prev_train_transform = None
+            self.prev_val_transform = None
             self.prev_test_transform = None
 
         def __enter__(self):
             self.prev_train_transform = self.outer._train_transform
+            self.prev_val_transform = self.outer._val_transform
             self.prev_test_transform = self.outer._test_transform
-            self.outer._train_transform = transforms.Compose([x for x in self.outer._train_transform.transforms if self.filter(x)]) if self.filter else transforms.ToTensor()
-            self.outer._test_transform = transforms.Compose([x for x in self.outer._test_transform.transforms if self.filter(x)]) if self.filter else transforms.ToTensor()
+            default_transform = v2.Compose([v2.ToImage(), v2.ToDtype(torch.float, scale=True)])
+            self.outer._train_transform = v2.Compose([x for x in self.outer._train_transform.transforms if self.filter(x)]) if self.filter else default_transform
+            self.outer._val_transform = v2.Compose([x for x in self.outer._val_transform.transforms if self.filter(x)]) if self.filter else default_transform
+            self.outer._test_transform = v2.Compose([x for x in self.outer._test_transform.transforms if self.filter(x)]) if self.filter else default_transform
 
         def __exit__(self, exc_type, exc_val, exc_tb):
             self.outer._train_transform = self.prev_train_transform
+            self.outer._val_transform = self.prev_val_transform
             self.outer._test_transform = self.prev_test_transform
             self.prev_train_transform = None
+            self.prev_val_transform = None
             self.prev_test_transform = None
 
     def no_augmentations(self, *args, **kwargs):
@@ -288,19 +393,9 @@ class BaseDataModule(pl.LightningDataModule):
 class MNISTDataModule(BaseDataModule):
     DatasetClass = MNIST
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.dataset_id = "mnist"
-        self.download_path = f"./temp/{self.dataset_id}"
-
 
 class CIFAR10DataModule(BaseDataModule):
     DatasetClass = CIFAR10
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.dataset_id = "cifar10"
-        self.download_path = f"./temp/{self.dataset_id}"
 
 
 def create_data_module(config, **kwargs):
@@ -314,13 +409,12 @@ def create_data_module(config, **kwargs):
     assert datamodule_class is not None, f"Unsupported dataset: {dataset_id}"
     datamodule = datamodule_class(**{
         "seed": config['seed'],
-        "batch_size": config['batch_size'],
+        "batch_size": 1,#config['batch_size'],
         "train_size": config['train_size'],
         "augmentation_pipeline": config.get('augmentation_pipeline', []),
         "pretrained_dataset_id": config.get('pretrained_dataset_id', None),
         **kwargs
     })
-    datamodule.prepare_data()
     return datamodule
 
 
