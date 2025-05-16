@@ -357,6 +357,16 @@ class BaseDataModule(pl.LightningDataModule):
         subset = torch.utils.data.Subset(base_dataset, final_indices)
         return DataLoader(subset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers, **kwargs)
 
+    def render_transforms(dm, split="train", n_samples=10, shuffle=True, fps=1, scale=4):
+        from torchvision.transforms import v2
+        skip_normalize_fn=lambda x: x if not isinstance(x, v2.Normalize) else None
+        with dm.no_augmentations(filter=skip_normalize_fn):
+            dataloader_fn = getattr(dm, f"{split}_dataloader")
+            dataloader = dataloader_fn(batch_size=n_samples, shuffle=shuffle)
+            repeated_dataloader = dm.repeated_dataloader(dataloader, n_samples=n_samples, shuffle=shuffle)
+            return repeated_dataloader.render_video(fps=fps, scale=scale)
+
+
     class _NoAugmentations:
         def __init__(self, outer, filter=None):
             self.outer = outer
