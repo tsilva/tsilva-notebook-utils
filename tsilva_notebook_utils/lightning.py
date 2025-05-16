@@ -504,3 +504,15 @@ def render_samples_per_class(dm, n_samples=5, split='train'):
 def seed_everything(*args, **kwargs):
     import pytorch_lightning as pl
     return pl.seed_everything(*args, **kwargs)
+
+
+def overfit_batches(model, datamodule, overfit_batches=1):
+    import pytorch_lightning as pl
+
+    trainer = pl.Trainer(
+        overfit_batches=overfit_batches,
+        max_epochs=100,
+        enable_checkpointing=False,
+        callbacks=[ThresholdStoppingCallback("train/acc", 1.0)]
+    )
+    return trainer.fit(model, datamodule=datamodule)

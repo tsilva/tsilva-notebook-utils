@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tsilva_notebook_utils"
-version = "0.0.87"
+version = "0.0.88"
 description = "Utility functions for Jupyter/Colab notebooks"
 authors = [
     {name = "Tiago Silva"}
