@@ -12,6 +12,7 @@ from torchvision.transforms import v2
 from torchvision.transforms import ToPILImage
 from tsilva_notebook_utils.video import save_tensor_frames, create_video_from_frames
 
+
 DATASET_SPECS = {
     "imagenet": {
         "image_size": 224,
@@ -29,6 +30,7 @@ DATASET_SPECS = {
         "std": [0.3081]
     }
 }
+
 
 class ThresholdStoppingCallback(pl.Callback):
     def __init__(self, metric, threshold):
