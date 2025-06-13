@@ -41,6 +41,7 @@ def run_episode(env_id, model, seed=None):
     env.close()
     return frames, total_reward
 
+
 def record_episode(env_id, model, seed=None, fps=30):
     import tempfile
     import imageio
@@ -51,7 +52,43 @@ def record_episode(env_id, model, seed=None, fps=30):
         imageio.mimsave(tmp.name, [np.array(f) for f in frames], macro_block_size=1, fps=fps)
         return tmp.name
 
+
 def render_episode(env_id, model, seed=None, fps=30):
     from IPython.display import Video
     video_path = record_episode(env_id, model, seed=seed, fps=fps)
     return Video(video_path, embed=True)
+
+
+def build_pl_callback(callback_id, *args, **kwargs):
+    import pytorch_lightning as pl
+
+    class EvalEpisodeAndRecordCallback(pl.Callback):
+        def __init__(self, every_n_episodes=10, fps=30, seed=None):
+            self.every_n_episodes = every_n_episodes
+            self.fps = fps
+            self.seed = seed
+            super().__init__()
+
+        def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+            import wandb
+            from tsilva_notebook_utils.gymnasium import record_episode
+
+            if getattr(pl_module, "episode_steps") != 0: return
+            episode = getattr(pl_module, "episode")
+            if episode == 0 or episode % self.every_n_episodes: return
+
+            video_path = record_episode(
+                env_id=pl_module.env_id,
+                model=pl_module.q_model,
+                seed=self.seed,
+                fps=self.fps
+            )
+            logger_run = trainer.logger.experiment
+            logger_run.log(
+                {"eval/video": wandb.Video(video_path, format="mp4")},
+                step=trainer.global_step
+            )
+            
+    return {
+        "EvalEpisodeAndRecordCallback": EvalEpisodeAndRecordCallback
+    }[callback_id](*args, **kwargs)
