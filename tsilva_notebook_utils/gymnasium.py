@@ -26,8 +26,6 @@ def run_episode(env, model, seed=None):
 
     device = get_module_device(model)
 
-    if type(env) is function: env = env()
-
     state, _ = env.reset(seed=seed)
     if seed is not None: 
         env.action_space.seed(seed)
@@ -53,6 +51,8 @@ def record_episode(env, model, seed=None, fps=30):
     import imageio
     import numpy as np
 
+    if type(env) is function: env = env(env_kwargs=dict(render_mode="rgb_array"))
+    
     frames, _ = run_episode(env, model, seed=seed)
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
         imageio.mimsave(tmp.name, [np.array(f) for f in frames], macro_block_size=1, fps=fps)
@@ -84,7 +84,7 @@ def build_pl_callback(callback_id, *args, **kwargs):
             if episode == 0 or episode % self.every_n_episodes: return
 
             video_path = record_episode(
-                env=pl_module.env,
+                env=pl_module.build_env_fn,
                 model=pl_module.q_model,
                 seed=self.seed,
                 fps=self.fps
