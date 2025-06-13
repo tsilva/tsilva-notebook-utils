@@ -82,7 +82,7 @@ def build_pl_callback(callback_id, *args, **kwargs):
             if episode == 0 or episode % self.every_n_episodes: return
 
             video_path = record_episode(
-                env_id=pl_module.env_id,
+                env=pl_module.env,
                 model=pl_module.q_model,
                 seed=self.seed,
                 fps=self.fps
