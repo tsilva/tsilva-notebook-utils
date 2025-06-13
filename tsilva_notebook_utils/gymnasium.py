@@ -51,8 +51,8 @@ def record_episode(env, model, seed=None, fps=30):
     import imageio
     import numpy as np
 
-    if type(env) is function: env = env(env_kwargs=dict(render_mode="rgb_array"))
-    
+    if callable(env): env = env(env_kwargs=dict(render_mode="rgb_array"))
+
     frames, _ = run_episode(env, model, seed=seed)
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
         imageio.mimsave(tmp.name, [np.array(f) for f in frames], macro_block_size=1, fps=fps)
