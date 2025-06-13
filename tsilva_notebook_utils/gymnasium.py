@@ -26,6 +26,8 @@ def run_episode(env, model, seed=None):
 
     device = get_module_device(model)
 
+    if type(env) is function: env = env()
+
     state, _ = env.reset(seed=seed)
     if seed is not None: 
         env.action_space.seed(seed)
