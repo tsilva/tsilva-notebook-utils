@@ -22,7 +22,7 @@ def build_env(
 
 def run_episode(env_id, model, seed=None):
     import torch
-    from .utils import get_module_device
+    from .torch import get_module_device
 
     device = get_module_device(model)
 
