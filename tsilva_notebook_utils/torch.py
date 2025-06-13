@@ -135,20 +135,8 @@ def get_model_parameter_counts(model):
     }
 
 
-def get_model_device(model):
-    """
-    Returns the device of the first parameter in the model.
-
-    Args:
-        model (torch.nn.Module): The PyTorch model.
-
-    Returns:
-        torch.device: The device of the first parameter.
-    """
-    for param in model.parameters():
-        return param.device
-    return None
-
+def get_module_device(module):
+    return next(module.parameters(), next(module.buffers(), None)).device
 
 def get_conv_filter_images(model, nrow=8, padding=1, scale=4):
     """
@@ -212,3 +200,26 @@ def configure_matmul_precision():
             print("TF32 not supported on this GPU, skipping matmul precision setting")
     else:
         print("CUDA not available, matmul precision setting skipped")
+
+
+def create_infinite_data_loader():
+    class InfiniteDataLoader(torch.utils.data.IterableDataset):
+        def __iter__(self):
+            while True: yield torch.tensor(0) 
+    dataloader = torch.utils.data.DataLoader(InfiniteDataLoader(), batch_size=1, num_workers=2, shuffle=False)
+    return dataloader
+
+
+def seed_everything(seed: int):
+    import random
+    import numpy as np
+    import torch
+    
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False

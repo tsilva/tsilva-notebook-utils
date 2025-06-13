@@ -46,6 +46,8 @@ def notify_and_disconnect_after_timeout(message="Notebook execution finished!", 
 
 def load_secrets_into_env(keys):
     import os
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
 
     try:
         from google.colab import userdata
@@ -84,18 +86,3 @@ def notebook_id_from_title():
     text = metadata['ipynb']['cells'][0]['source'][0]
     slug = _slugify(text)
     return slug
-
-
-def set_seed(seed: int):
-    import random
-    import numpy as np
-    import torch
-    
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU
-
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False

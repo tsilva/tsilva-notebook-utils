@@ -501,9 +501,9 @@ def render_samples_per_class(dm, n_samples=5, split='train'):
     return plt
 
 
-def seed_everything(*args, **kwargs):
+def seed_everything(*args, workers=True, **kwargs):
     import pytorch_lightning as pl
-    return pl.seed_everything(*args, **kwargs)
+    return pl.seed_everything(*args, workers=workers, **kwargs)
 
 
 def overfit_batches(model, datamodule, overfit_batches=1):
@@ -516,3 +516,21 @@ def overfit_batches(model, datamodule, overfit_batches=1):
         callbacks=[ThresholdStoppingCallback("train/acc", 1.0)]
     )
     return trainer.fit(model, datamodule=datamodule)
+
+
+class StopOnLambda(pl.Callback):
+    """
+    Stop training when a user-defined lambda condition on metrics is True.
+    Example:
+        StopOnLambda(lambda metrics: metrics.get('reward_mean', -float('inf')) >= 475)
+    """
+    def __init__(self, condition, message="Stopping criterion met."):
+        super().__init__()
+        self.condition = condition
+        self.message = message
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        metrics = trainer.callback_metrics
+        if self.condition(metrics):
+            print(self.message)
+            trainer.should_stop = True
