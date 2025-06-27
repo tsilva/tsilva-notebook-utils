@@ -40,13 +40,17 @@ def build_env(
     return env, state, info
 
 
-def run_episode(env_id, model, seed=None):
+def run_episode(env, model, seed=None):
     import torch
     from .torch import get_module_device
 
     device = get_module_device(model)
 
-    env, state, _ = build_env(env_id, seed=seed, env_kwargs=dict(render_mode="rgb_array"))
+    state, _ = env.reset(seed=seed)
+    if seed is not None: 
+        env.action_space.seed(seed)
+        env.observation_space.seed(seed)
+
     frames = []
     done = False
     total_reward = 0.0
@@ -62,20 +66,22 @@ def run_episode(env_id, model, seed=None):
     return frames, total_reward
 
 
-def record_episode(env_id, model, seed=None, fps=30):
+def record_episode(env, model, seed=None, fps=30):
     import tempfile
     import imageio
     import numpy as np
 
-    frames, _ = run_episode(env_id, model, seed=seed)
+    if callable(env): env, _, _ = env(env_kwargs=dict(render_mode="rgb_array"))
+
+    frames, _ = run_episode(env, model, seed=seed)
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
         imageio.mimsave(tmp.name, [np.array(f) for f in frames], macro_block_size=1, fps=fps)
         return tmp.name
 
 
-def render_episode(env_id, model, seed=None, fps=30):
+def render_episode(env, model, seed=None, fps=30):
     from IPython.display import Video
-    video_path = record_episode(env_id, model, seed=seed, fps=fps)
+    video_path = record_episode(env, model, seed=seed, fps=fps)
     return Video(video_path, embed=True)
 
 
@@ -98,7 +104,7 @@ def build_pl_callback(callback_id, *args, **kwargs):
             if episode == 0 or episode % self.every_n_episodes: return
 
             video_path = record_episode(
-                env_id=pl_module.env_id,
+                env=pl_module.build_env_fn,
                 model=pl_module.q_model,
                 seed=self.seed,
                 fps=self.fps
