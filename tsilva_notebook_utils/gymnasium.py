@@ -18,28 +18,6 @@ import torch
 from torch.distributions import Categorical
 
 
-def build_env(
-    env_id, 
-    seed=None, 
-    normalize_observation=False,
-    env_kwargs={}
-):
-    import gymnasium as gym
-    from gymnasium.wrappers import NormalizeObservation
-
-    env = gym.make(env_id, **env_kwargs)
-
-    if normalize_observation: 
-        env = NormalizeObservation(env)
-
-    state, info = env.reset(seed=seed)
-    if seed is not None: 
-        env.action_space.seed(seed)
-        env.observation_space.seed(seed)
-        
-    return env, state, info
-
-
 def run_episode(env, model, seed=None):
     import torch
     from .torch import get_module_device
@@ -534,3 +512,13 @@ v.addEventListener('dblclick', () => {{
 """.strip()
     
     return HTML(html)
+
+def build_env(env_id, n_envs=1, seed=None, norm_obs=False, norm_reward=False):
+    import multiprocessing
+    from stable_baselines3.common.env_util import make_vec_env
+    from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, SubprocVecEnv
+    vec_env_cls = SubprocVecEnv if n_envs > 1 else DummyVecEnv
+    if n_envs == 'auto': n_envs = multiprocessing.cpu_count()
+    env = make_vec_env(env_id, n_envs=n_envs, seed=seed, vec_env_cls=vec_env_cls)
+    if norm_obs or norm_reward: env = VecNormalize(env, norm_obs=norm_obs, norm_reward=norm_reward)
+    return env

@@ -14,3 +14,27 @@ def render_run_iframe():
     """
 
     display(HTML(iframe_code))
+
+
+def runtime_metadata():
+    # --- Runtime metadata --------------------------------------------------------
+    import subprocess, torch, platform, os
+
+    def _get_git_commit() -> str:
+        """Return the short SHA if this is a Git repo, else 'unknown'."""
+        try:
+            return subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except Exception:          # not a Git checkout or Git not installed
+            return "unknown"
+
+    return {
+        "git_commit": _get_git_commit(),
+        "torch_version": torch.__version__,
+        "torch_cuda": torch.version.cuda or "cpu",
+        "cuda_device": (torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu"),
+        "python_version": platform.python_version(),
+        "run_host": os.uname().nodename,
+    }
+
