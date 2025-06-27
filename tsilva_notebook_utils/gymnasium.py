@@ -525,6 +525,6 @@ def build_env(env_id, n_envs=1, seed=None, norm_obs=False, norm_reward=False):
 
 
 def set_random_seed(seed):
-    from stable_baselines3.common.utils import set_random_seed
-    set_random_seed(seed)
+    from stable_baselines3.common.utils import set_random_seed as _set_random_seed
+    _set_random_seed(seed)
 
