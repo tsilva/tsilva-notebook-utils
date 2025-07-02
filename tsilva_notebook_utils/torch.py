@@ -1,25 +1,23 @@
 import random
 from collections import OrderedDict
 
-import numpy as np
-import torch
-import torch.nn as nn
-import torchvision.utils as vutils
-from PIL import Image
-from torchvision.transforms.functional import to_pil_image
-
 
 def get_default_device():
+    import torch
     if torch.backends.mps.is_available() and torch.backends.mps.is_built(): return torch.device("mps")
     elif torch.cuda.is_available(): return torch.device("cuda")
     else: return torch.device("cpu")
 
 # TODO: deprecate this function in favor of get_default_device()
 def get_current_device():
+    import torch
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return device
 
 def get_gpu_stats():
+    import torch
+
     assert torch.cuda.is_available(), "CUDA is not available. Running on CPU."
 
     device = get_current_device()
@@ -37,6 +35,7 @@ def get_gpu_stats():
 
 
 def inspect_tensor_dataset(dataset, show_samples=3):
+    import torch
     """
     Returns a dictionary describing a TensorDataset.
     
@@ -62,6 +61,8 @@ def inspect_tensor_dataset(dataset, show_samples=3):
 
 
 def apply_weight_init(model, weight_init, nonlinearity):
+    import torch
+    import torch.nn as nn
     """
     Applies weight initialization to the parameters of a given model.
 
@@ -97,6 +98,7 @@ def apply_weight_init(model, weight_init, nonlinearity):
 
 
 def get_model_grad_norms(model, per_layer=False):
+    import torch
     """
     Calculates the L2 norm of gradients for each parameter in the model and/or the total L2 norm.
     Args:
@@ -153,6 +155,10 @@ def get_module_device(module):
     return next(module.parameters(), next(module.buffers(), None)).device
 
 def get_conv_filter_images(model, nrow=8, padding=1, scale=4):
+    import torch
+    import torchvision.utils as vutils
+    from PIL import Image
+    from torchvision.transforms.functional import to_pil_image
     """
     Returns a dict of PIL images visualizing filters in Conv2d and ConvTranspose2d layers.
     
@@ -199,6 +205,7 @@ def get_conv_filter_images(model, nrow=8, padding=1, scale=4):
 
 
 def configure_matmul_precision():
+    import torch
     if torch.cuda.is_available():
         # Get compute capability of the current CUDA device
         major, minor = torch.cuda.get_device_capability()
@@ -213,6 +220,7 @@ def configure_matmul_precision():
 
 
 def create_infinite_data_loader():
+    import torch
     class InfiniteDataLoader(torch.utils.data.IterableDataset):
         def __iter__(self):
             while True: yield torch.tensor(0) 
@@ -221,8 +229,9 @@ def create_infinite_data_loader():
 
 
 def seed_everything(seed: int):
+    import numpy as np
+    import torch
 
-    
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

@@ -1,10 +1,10 @@
 import base64
 import os
 
-import requests
 
 
 def github_get_file_contents(repo, file_path, branch="main", username=None, token=None):
+    import requests
 
     if username is None: username = os.getenv("GITHUB_USERNAME")
     if not username: raise ValueError("GITHUB_USERNAME environment variable not set")

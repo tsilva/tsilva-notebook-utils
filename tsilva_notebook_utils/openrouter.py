@@ -1,10 +1,10 @@
 import os
 
-from openai import OpenAI
-
 
 class OpenRouterLLM:
     def __init__(self, model_id, system_prompt=None, api_key=None):
+
+        from openai import OpenAI
 
         if model_id is None: raise ValueError("model_id cannot be None")
         if api_key is None: api_key = os.getenv("OPENROUTER_API_KEY")

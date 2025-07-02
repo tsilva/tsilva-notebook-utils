@@ -2,11 +2,10 @@ import json
 import random
 from typing import Any, Callable
 
-import numpy as np
-import torch
-from datasets import Dataset
-from PIL import Image
-from torchvision.transforms.functional import to_tensor
+try:
+    from datasets import Dataset
+except Exception:
+    Dataset = object  # type: ignore
 
 
 class AugmentedImageDataset(Dataset):
@@ -38,6 +37,7 @@ class AugmentedImageDataset(Dataset):
         y = item["y"]
 
         def _process(_x):
+            import torch
             if random.random() < self.prob:
                 if random.random() < self.noise_prob:
                     noise = torch.randn_like(_x) * self.noise_std
@@ -77,6 +77,10 @@ class ShiftedDataset(Dataset):
 
 
 def process_images(images, mode="color", quantize_colors=None, scale=1.0, crop_paddings=None, noise_factor=0.0, return_type="pt"):
+    import numpy as np
+    import torch
+    from PIL import Image
+    from torchvision.transforms.functional import to_tensor
     processed = []
     for image in images:
         # Crop if needed

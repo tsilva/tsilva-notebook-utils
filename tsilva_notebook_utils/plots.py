@@ -3,17 +3,7 @@ import base64
 from io import BytesIO
 from typing import Any, Callable, List, Optional, Union
 
-import matplotlib.pyplot as plt
-import numpy as np
-import seaborn as sns
-import torch
-import umap
-from bokeh.io import output_notebook
-from bokeh.models import ColumnDataSource, HoverTool
-from bokeh.plotting import figure, show
-from PIL.Image import Image
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
+
 
 from .numpy import reshape_vector_to_grid, to_numpy
 
@@ -21,10 +11,12 @@ from .numpy import reshape_vector_to_grid, to_numpy
 def plot_line(
     data,
     title='Series Plot',
-    xlabel='X-axis', 
+    xlabel='X-axis',
     ylabel='Y-axis',
     figsize=(12, 6)
-): 
+):
+
+    import matplotlib.pyplot as plt
 
     # Create a new figure for plotting
     plt.figure(figsize=figsize)
@@ -47,6 +39,8 @@ def plot_series(
     ylabel='Y-axis',
     figsize=(12, 6)
 ):
+    import matplotlib.pyplot as plt
+    import numpy as np
     
 
     # Ensure data is a NumPy array
@@ -81,6 +75,8 @@ def plot_histogram(
     title='Histogram', 
     bins=50
 ):
+
+    import matplotlib.pyplot as plt
     
 
     plt.hist(data, bins=bins)
@@ -102,6 +98,8 @@ def plot_series_over_indices(
     xlabel='Index',
     ylabel='Value'
 ):
+
+    import numpy as np
     
 
     # Stack the data from the map into a 2D array (shape: indices x series)
@@ -125,6 +123,8 @@ def plot_snapshots_over_indices(
     serieslabel='Series',
     num_snapshots=5
 ):
+
+    import numpy as np
     
 
     total_indices = len(data[key])
@@ -170,6 +170,15 @@ def plot_embeddings_with_inputs(
         **embed_kwargs: Passed to the embedding transformer.
     """
     
+
+    from PIL.Image import Image
+    import numpy as np
+    import umap
+    from sklearn.manifold import TSNE
+    from sklearn.decomposition import PCA
+    from bokeh.io import output_notebook
+    from bokeh.models import ColumnDataSource, HoverTool
+    from bokeh.plotting import figure, show
 
     if output_notebook:
         output_notebook()
@@ -253,6 +262,10 @@ def plot_vector_batch_heatmap(
     """
     
 
+    import numpy as np
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
     data = to_numpy(tensor_batch)
 
     batch_size, vector_dim = data.shape
@@ -290,7 +303,10 @@ def plot_tensor_stats_heatmaps(
     collapse_grid_width=16,
     stats=["raw", "mean", "median", "std", "var"],
     **heatmap_kwargs
-):  
+):
+
+    import torch
+    import matplotlib.pyplot as plt
     
 
     

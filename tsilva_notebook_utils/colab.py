@@ -3,8 +3,7 @@ import re
 import time
 import unicodedata
 
-from dotenv import load_dotenv
-from tqdm import tqdm
+
 
 try:  # noqa: SIM105
     import google.colab  # type: ignore
@@ -27,6 +26,8 @@ def disconnect_after_timeout(timeout_seconds=None):
     if timeout_seconds is None: timeout_seconds = 60 * 5
 
     print(f"Starting idle timeout check. Will disconnect after {timeout_seconds} seconds of no interruption...")
+
+    from tqdm import tqdm
 
     start_time = time.time()
     with tqdm(total=timeout_seconds, desc="Idle Timeout", unit="s") as pbar:
@@ -60,6 +61,8 @@ def notify_and_disconnect_after_timeout(message="Notebook execution finished!", 
 
 
 def load_secrets_into_env(keys):
+    from dotenv import load_dotenv
+
     load_dotenv(override=True)
 
     try:

@@ -3,11 +3,7 @@ import os
 import re
 import tempfile
 
-import cv2
-import imageio_ffmpeg as ffmpeg
-import torch
-from IPython.display import HTML
-from torchvision.transforms import ToPILImage
+
 
 
 def save_tensor_frames(frames, output_dir, ext="jpg", start_index=0):
@@ -20,6 +16,9 @@ def save_tensor_frames(frames, output_dir, ext="jpg", start_index=0):
         ext: Image extension.
         start_index: Starting index for naming the saved frames.
     """
+    import torch
+    from torchvision.transforms import ToPILImage
+
     os.makedirs(output_dir, exist_ok=True)
     to_pil = ToPILImage()
 
@@ -42,6 +41,10 @@ def create_video_from_frames(directory_path, scale=1, fps=30, format='mp4'):
     Returns:
         HTML object to display the embedded video.
     """
+    import cv2
+    import imageio_ffmpeg as ffmpeg
+    from IPython.display import HTML
+
     image_files = sorted([
         f for f in os.listdir(directory_path)
         if f.lower().endswith(('.jpg', '.jpeg', '.png'))
@@ -100,6 +103,8 @@ def render_video_from_batches(data, frame_mapper=None, **video_kwargs):
     Returns:
         HTML object for embedded video.
     """
+    import torch
+
     frame_index = 0
     with tempfile.TemporaryDirectory() as temp_dir:
         if isinstance(data, torch.Tensor):
@@ -134,6 +139,8 @@ def render_video_from_dataloader(loader, x_key="x", y_key="y",
     Returns:
         HTML object of the rendered video.
     """
+    import torch
+
     def make_frames(batch):
         inputs, targets = batch[x_key], batch[y_key]
         batch_size = inputs.size(0)

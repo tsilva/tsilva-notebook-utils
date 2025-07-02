@@ -2,16 +2,19 @@ import os
 import platform
 import subprocess
 
-import torch
-import wandb
-from IPython.display import HTML, display
+
 
 
 def login(*args, **kwargs):
+    import wandb
+
     return wandb.login(*args, **kwargs)
 
 
 def render_run_iframe():
+    import wandb
+    from IPython.display import HTML, display
+
     run_url = wandb.run.get_url()
     iframe_code = f"""
     <iframe src="{run_url}" width="100%" height="1200px"></iframe>
@@ -21,6 +24,8 @@ def render_run_iframe():
 
 
 def runtime_metadata():
+    import torch
+
     # --- Runtime metadata -----------------------------------------------------
     def _get_git_commit() -> str:
         """Return the short SHA if this is a Git repo, else 'unknown'."""
