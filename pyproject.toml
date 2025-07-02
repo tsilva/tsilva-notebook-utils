@@ -26,6 +26,97 @@ dependencies = [
     "pytorch-lightning"
 ]
 
+[project.optional-dependencies]
+colab = [
+    "google-colab",
+    "python-dotenv",
+    "tqdm"
+]
+datasets = [
+    "datasets",
+    "Pillow",
+    "torch",
+    "torchvision"
+]
+github = [
+    "requests"
+]
+gymnasium = [
+    "imageio",
+    "numpy",
+    "pytorch-lightning",
+    "torch",
+    "wandb",
+    "Pillow",
+    "stable-baselines3"
+]
+huggingface = [
+    "huggingface_hub",
+    "torch"
+]
+lightning = [
+    "pytorch-lightning",
+    "torch",
+    "torchvision",
+    "Pillow"
+]
+notifications = [
+    "requests"
+]
+openrouter = [
+    "openai"
+]
+plots = [
+    "matplotlib",
+    "seaborn",
+    "umap-learn",
+    "bokeh",
+    "Pillow",
+    "scikit-learn",
+    "torch"
+]
+torch = [
+    "torch",
+    "torchvision",
+    "Pillow",
+    "numpy"
+]
+video = [
+    "opencv-python",
+    "imageio-ffmpeg",
+    "torch",
+    "torchvision"
+]
+wandb = [
+    "wandb",
+    "torch"
+]
+
+all = [
+    "google-colab",
+    "python-dotenv",
+    "tqdm",
+    "datasets",
+    "Pillow",
+    "torch",
+    "torchvision",
+    "requests",
+    "imageio",
+    "numpy",
+    "pytorch-lightning",
+    "wandb",
+    "stable-baselines3",
+    "huggingface_hub",
+    "matplotlib",
+    "seaborn",
+    "umap-learn",
+    "bokeh",
+    "scikit-learn",
+    "opencv-python",
+    "imageio-ffmpeg",
+    "openai"
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["tsilva_notebook_utils"]
 
