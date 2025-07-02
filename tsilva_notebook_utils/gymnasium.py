@@ -478,6 +478,7 @@ def collect_rollouts(
         in *Stable-Baselines3*-compatible, env-major flattened order.
     """
 
+    from torch.distributions import Categorical
     # ------------------------------------------------------------------
     # 0. Sanity checks & helpers
     # ------------------------------------------------------------------
