@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 
 def to_numpy(data):
@@ -7,7 +6,10 @@ def to_numpy(data):
     Converts input to a NumPy array. Handles PyTorch tensors.
     """
     
-    if isinstance(data, torch.Tensor): return data.detach().cpu().numpy()
+    import torch
+
+    if isinstance(data, torch.Tensor):
+        return data.detach().cpu().numpy()
     return np.asarray(data)
 
 def reshape_vector_to_grid(vector, max_width=16):

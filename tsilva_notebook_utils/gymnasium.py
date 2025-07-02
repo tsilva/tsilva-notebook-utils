@@ -11,25 +11,19 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple, Union
 
-import imageio
-import imageio.v3 as iio
-import numpy as np
-import pytorch_lightning as pl
-import torch
-import wandb
-from IPython.display import HTML, Video
-from PIL import Image, ImageDraw, ImageFont
-from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.utils import set_random_seed as _set_random_seed
-from stable_baselines3.common.vec_env import (DummyVecEnv, SubprocVecEnv,
-                                              VecNormalize)
-from torch.distributions import Categorical
-from torch.utils.data import Dataset
+try:
+    from torch.utils.data import Dataset as TorchDataset
+except Exception:
+    TorchDataset = object  # type: ignore
+
+
 
 from .torch import get_module_device
 
 
 def run_episode(env, model, seed=None):
+
+    import torch
 
 
     device = get_module_device(model)
@@ -56,6 +50,9 @@ def run_episode(env, model, seed=None):
 
 def record_episode(env, model, seed=None, fps=30):
 
+    import imageio
+    import numpy as np
+
 
     if callable(env): env, _, _ = env(env_kwargs=dict(render_mode="rgb_array"))
 
@@ -66,11 +63,14 @@ def record_episode(env, model, seed=None, fps=30):
 
 
 def render_episode(env, model, seed=None, fps=30):
+    from IPython.display import Video
     video_path = record_episode(env, model, seed=seed, fps=fps)
     return Video(video_path, embed=True)
 
 
 def build_pl_callback(callback_id, *args, **kwargs):
+    import pytorch_lightning as pl
+    import wandb
     class EvalEpisodeAndRecordCallback(pl.Callback):
         def __init__(self, every_n_episodes=10, fps=30, seed=None):
             self.every_n_episodes = every_n_episodes
@@ -129,6 +129,10 @@ def collect_rollouts(
        become equal to discounted returns.
     2. **GAE computation** – When *compute_advantages* is ``True`` the
        routine computes Generalised Advantage Estimates (GAE-λ).
+
+    import numpy as np
+    import torch
+    from torch.distributions import Categorical
 
     Parameters
     ----------
@@ -332,6 +336,12 @@ def render_episode_frames(
       notebook so the browser can reach it.
     """
 
+    import itertools
+    import numpy as np
+    from IPython.display import HTML
+    from PIL import Image, ImageDraw, ImageFont
+    import imageio.v3 as iio
+
     # ---------------- font --------------------------------------------------
     if font is None:
         try:
@@ -518,6 +528,10 @@ v.addEventListener('dblclick', () => {{
     return HTML(html)
 
 def build_env(env_id, n_envs=1, seed=None, norm_obs=False, norm_reward=False):
+
+    from stable_baselines3.common.env_util import make_vec_env
+    from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNormalize
+
     
     if n_envs == 'auto': n_envs = multiprocessing.cpu_count()
     vec_env_cls = SubprocVecEnv if n_envs > 1 else DummyVecEnv
@@ -527,12 +541,13 @@ def build_env(env_id, n_envs=1, seed=None, norm_obs=False, norm_reward=False):
 
 
 def set_random_seed(seed):
+    from stable_baselines3.common.utils import set_random_seed as _set_random_seed
+
     _set_random_seed(seed)
 
 
 def log_env_info(env) -> None:
-    """
-    Print key attributes of an environment or a vec-env.
+    """Print key attributes of an environment or a vec-env.
 
     Handles:
       • Plain or wrapped Gym/Gymnasium envs
@@ -543,6 +558,8 @@ def log_env_info(env) -> None:
       Env ID, observation/action space, (reward range if available),
       max episode steps.
     """
+    import numpy as np
+    from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
     # ─────────────────────────────── helpers ──────────────────────────────────────
     def _compact(arr: np.ndarray) -> str:
@@ -623,6 +640,8 @@ def log_env_info(env) -> None:
 # -----------------------------------------------------------------------------
 
 def _device_of(module: torch.nn.Module) -> torch.device:  # type: ignore
+    import torch
+
     """Return the device of *module*'s first parameter."""
     return next(module.parameters()).device
 
@@ -644,6 +663,10 @@ def collect_rollouts(
     collect_frames: bool = False,
 ):
     """Collect *n_steps* transitions from *env* in parallel and return env‑major tensors."""
+
+    import numpy as np
+    import torch
+    from torch.distributions import Categorical
 
     device: torch.device = _device_of(policy_model)
     n_envs: int = env.num_envs
@@ -782,7 +805,7 @@ def group_trajectories_by_episode(trajectories):
 
 
 # TODO: should dataloader move to gpu?
-class RolloutDataset(Dataset):
+class RolloutDataset(TorchDataset):
     """Holds PPO roll-out tensors and lets them be swapped in-place."""
     def __init__(self):
         self.trajectories = None 
