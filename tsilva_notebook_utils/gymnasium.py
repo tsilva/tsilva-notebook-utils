@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import itertools
+import torch
+import numpy as np
 import multiprocessing
 import os
 import shutil
@@ -9,7 +10,7 @@ import tempfile
 import uuid
 from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple
 
 try:
     from torch.utils.data import Dataset as TorchDataset
@@ -650,65 +651,129 @@ def _device_of(module: torch.nn.Module) -> torch.device:  # type: ignore
 # Rollout collector (env‑major)
 # -----------------------------------------------------------------------------
 
+
+
 def collect_rollouts(
     env,
     policy_model: torch.nn.Module,
     value_model: Optional[torch.nn.Module] = None,
-    n_steps: int = 1024,
+    n_steps: Optional[int] = None,
+    n_episodes: Optional[int] = None,
+    *,
     deterministic: bool = False,
     gamma: float = 0.99,
     lam: float = 0.95,
     normalize_advantage: bool = True,
     adv_norm_eps: float = 1e-8,
     collect_frames: bool = False,
-):
-    """Collect *n_steps* transitions from *env* in parallel and return env‑major tensors."""
+) -> Tuple[torch.Tensor, ...]:
+    """Collect transitions from *env* until *n_steps* or *n_episodes* (whichever
+    comes first) are reached.
 
-    import numpy as np
-    import torch
-    from torch.distributions import Categorical
+    Parameters
+    ----------
+    env : VecEnv-like
+        Vectorised environment exposing ``reset()``, ``step(actions)`` and
+        ``get_images()`` (if *collect_frames* is ``True``).
+    policy_model : nn.Module
+        Model that maps observations to *logits* (action probabilities).
+    value_model : nn.Module | None
+        Optional value network; if ``None``, value estimates are *zero*.
+    n_steps : int | None, default 1024
+        Maximum number of *timesteps* (across all environments) to collect.
+    n_episodes : int | None, default None
+        Maximum number of *episodes* (across all environments) to collect.
+        Either *n_steps*, *n_episodes* or both **must** be provided.
+    deterministic : bool, default False
+        Whether to act greedily (``argmax``) instead of sampling.
+    gamma, lam : float
+        Discount and GAE-λ parameters.
+    normalize_advantage : bool, default True
+        Whether to standardise advantages.
+    adv_norm_eps : float, default 1e-8
+        Numerical stability epsilon for advantage normalisation.
+    collect_frames : bool, default False
+        If ``True``, return RGB frames alongside transition tensors.
+
+    Returns
+    -------
+    Tuple[Tensor, ...]
+        ``(states, actions, rewards, dones, logps, values, advs, returns, frames)``
+        in *Stable-Baselines3*-compatible, env-major flattened order.
+    """
+
+    # ------------------------------------------------------------------
+    # 0. Sanity checks & helpers
+    # ------------------------------------------------------------------
+    assert (n_steps is not None and n_steps > 0) or (
+        n_episodes is not None and n_episodes > 0
+    ), "Provide *n_steps*, *n_episodes*, or both (> 0)."
+
+    def _device_of(module: torch.nn.Module) -> torch.device:
+        """Infer the device of *module*'s first parameter."""
+        return next(module.parameters()).device
 
     device: torch.device = _device_of(policy_model)
     n_envs: int = env.num_envs
 
     # ------------------------------------------------------------------
-    # 1. Buffers (time, env) for easy appending during rollout
+    # 1. Buffers (dynamic lists — we'll stack/concat later)
     # ------------------------------------------------------------------
-    obs_buf: list[np.ndarray] = []       # build list first, stack later
-    act_buf = np.zeros((n_steps, n_envs), np.int64)
-    rew_buf = np.zeros((n_steps, n_envs), np.float32)
-    done_buf = np.zeros((n_steps, n_envs), bool)
-    logp_buf = np.zeros((n_steps, n_envs), np.float32)
-    val_buf = np.zeros((n_steps, n_envs), np.float32)
+    obs_buf: list[np.ndarray] = []
+    act_buf: list[np.ndarray] = []
+    rew_buf: list[np.ndarray] = []
+    done_buf: list[np.ndarray] = []
+    logp_buf: list[np.ndarray] = []
+    val_buf: list[np.ndarray] = []
     frame_buf: list[Sequence[np.ndarray]] | None = [] if collect_frames else None
+
+    step_count = 0
+    episode_count = 0
 
     # ------------------------------------------------------------------
     # 2. Rollout
     # ------------------------------------------------------------------
     obs = env.reset()
-    for t in range(n_steps):
+    while True:
         obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device)
-        with torch.no_grad(): logits = policy_model(obs_t)
+        with torch.no_grad():
+            logits = policy_model(obs_t)
         dist = Categorical(logits=logits)
 
         act_t = logits.argmax(-1) if deterministic else dist.sample()
         logp_t = dist.log_prob(act_t)
         val_t = (
-            value_model(obs_t).squeeze(-1) if value_model is not None else torch.zeros(n_envs, device=device)
+            value_model(obs_t).squeeze(-1)
+            if value_model is not None
+            else torch.zeros(n_envs, device=device)
         )
 
         next_obs, reward, done, infos = env.step(act_t.cpu().numpy())
 
-        # store
+        # store step
         obs_buf.append(obs.copy())
-        act_buf[t], rew_buf[t], done_buf[t] = act_t.cpu().numpy(), reward, done
-        logp_buf[t] = logp_t.detach().cpu().numpy()
-        val_buf[t] = val_t.detach().cpu().numpy()
+        act_buf.append(act_t.cpu().numpy())
+        rew_buf.append(reward)
+        done_buf.append(done)
+        logp_buf.append(logp_t.detach().cpu().numpy())
+        val_buf.append(val_t.detach().cpu().numpy())
 
         if collect_frames and frame_buf is not None:
             frame_buf.append(env.get_images())
 
+        step_count += 1
+        episode_count += done.sum()
+
+        # termination condition
+        if (n_steps is not None and step_count >= n_steps) or (
+            n_episodes is not None and episode_count >= n_episodes
+        ):
+            obs = next_obs  # needed for bootstrap
+            break
+
         obs = next_obs
+
+    T = step_count  # actual collected timesteps
 
     # ------------------------------------------------------------------
     # 3. Bootstrap value for the next state of each env
@@ -717,62 +782,70 @@ def collect_rollouts(
         obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device)
         next_values = (
             value_model(obs_t).squeeze(-1).cpu().numpy()
-            if value_model is not None else np.zeros(n_envs, dtype=np.float32)
+            if value_model is not None
+            else np.zeros(n_envs, dtype=np.float32)
         )
 
     # ------------------------------------------------------------------
-    # 4. GAE‑λ advantage / return (with correct masking)
+    # 4. Stack buffers to (T, E) arrays for GAE
     # ------------------------------------------------------------------
-    adv_buf = np.zeros_like(rew_buf)
-    ret_buf = np.zeros_like(rew_buf)
+    act_arr = np.stack(act_buf)  # (T, E)
+    rew_arr = np.stack(rew_buf)
+    done_arr = np.stack(done_buf)
+    logp_arr = np.stack(logp_buf)
+    val_arr = np.stack(val_buf)
+
+    # ------------------------------------------------------------------
+    # 5. GAE-λ advantage / return (with masking)
+    # ------------------------------------------------------------------
+    adv_arr = np.zeros_like(rew_arr, dtype=np.float32)
 
     gae = np.zeros(n_envs, dtype=np.float32)
-    next_non_terminal = 1.0 - done_buf[-1].astype(np.float32)
+    next_non_terminal = 1.0 - done_arr[-1].astype(np.float32)
     next_value = next_values
 
-    for t in reversed(range(n_steps)):
-        delta = rew_buf[t] + gamma * next_value * next_non_terminal - val_buf[t]
+    for t in reversed(range(T)):
+        delta = rew_arr[t] + gamma * next_value * next_non_terminal - val_arr[t]
         gae = delta + gamma * lam * next_non_terminal * gae
-        adv_buf[t] = gae
+        adv_arr[t] = gae
 
-        next_non_terminal = 1.0 - done_buf[t].astype(np.float32)
-        next_value = val_buf[t]
+        next_non_terminal = 1.0 - done_arr[t].astype(np.float32)
+        next_value = val_arr[t]
 
-    ret_buf = adv_buf + val_buf
+    ret_arr = adv_arr + val_arr
 
     if normalize_advantage:
-        adv_flat = adv_buf.reshape(-1)
-        adv_buf = (adv_buf - adv_flat.mean()) / (adv_flat.std() + adv_norm_eps)
+        adv_flat = adv_arr.reshape(-1)
+        adv_arr = (adv_arr - adv_flat.mean()) / (adv_flat.std() + adv_norm_eps)
 
     # ------------------------------------------------------------------
-    # 5. Env‑major flattening: (time, env, …) -> (env, time, …) -> (env*time, …)
+    # 6. Env-major flattening: (T, E, …) -> (E, T, …) -> (E*T, …)
     # ------------------------------------------------------------------
-    obs_arr = np.stack(obs_buf)                       # (T, E, obs)
-    obs_env_major = obs_arr.transpose(1, 0, 2)        # (E, T, obs)
-    states = torch.as_tensor(obs_env_major.reshape(n_envs * n_steps, -1), dtype=torch.float32)
+    obs_arr = np.stack(obs_buf)  # (T, E, obs)
+    obs_env_major = obs_arr.transpose(1, 0, 2)  # (E, T, obs)
+    states = torch.as_tensor(obs_env_major.reshape(n_envs * T, -1), dtype=torch.float32)
 
     def _flat_env_major(arr: np.ndarray, dtype: torch.dtype):
         return torch.as_tensor(arr.transpose(1, 0).reshape(-1), dtype=dtype)
 
-    actions = _flat_env_major(act_buf, torch.int64)
-    rewards = _flat_env_major(rew_buf, torch.float32)
-    dones = _flat_env_major(done_buf, torch.bool)
-    logps = _flat_env_major(logp_buf, torch.float32)
-    values = _flat_env_major(val_buf, torch.float32)
-    advs = _flat_env_major(adv_buf, torch.float32)
-    returns = _flat_env_major(ret_buf, torch.float32)
+    actions = _flat_env_major(act_arr, torch.int64)
+    rewards = _flat_env_major(rew_arr, torch.float32)
+    dones = _flat_env_major(done_arr, torch.bool)
+    logps = _flat_env_major(logp_arr, torch.float32)
+    values = _flat_env_major(val_arr, torch.float32)
+    advs = _flat_env_major(adv_arr, torch.float32)
+    returns = _flat_env_major(ret_arr, torch.float32)
 
     if collect_frames and frame_buf is not None:
-        # frame_buf is list[T] where each item is list[E] of images
         frames_env_major: list[np.ndarray] = []
         for e in range(n_envs):
-            for t in range(n_steps):
+            for t in range(T):
                 frames_env_major.append(frame_buf[t][e])
     else:
-        frames_env_major = [0] * (n_envs * n_steps)
+        frames_env_major = [0] * (n_envs * T)
 
     # ------------------------------------------------------------------
-    # 6. Return in the SB3‑compatible order
+    # 7. Return (SB3 order)
     # ------------------------------------------------------------------
     return (
         states,
@@ -785,6 +858,7 @@ def collect_rollouts(
         returns,
         frames_env_major,
     )
+
 
 def group_trajectories_by_episode(trajectories):
     episodes = []
