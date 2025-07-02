@@ -170,6 +170,8 @@ def collect_rollouts(
     frames_by_ep : Optional[List[List[np.ndarray]]]
         Raw RGB frames grouped by episode when *collect_frames* is *True*.
     """
+    from torch.distributions import Categorical
+    
     if n_episodes < 1:
         raise ValueError("n_episodes must be ≥ 1")
 
