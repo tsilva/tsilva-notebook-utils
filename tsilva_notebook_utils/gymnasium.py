@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import multiprocessing
 import os
 import shutil
 import subprocess
@@ -8,20 +9,28 @@ import tempfile
 import uuid
 from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple, Union
 
+import imageio
 import imageio.v3 as iio
 import numpy as np
-from IPython.display import HTML
-from PIL import Image, ImageDraw, ImageFont
+import pytorch_lightning as pl
 import torch
+import wandb
+from IPython.display import HTML, Video
+from PIL import Image, ImageDraw, ImageFont
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.utils import set_random_seed as _set_random_seed
+from stable_baselines3.common.vec_env import (DummyVecEnv, SubprocVecEnv,
+                                              VecNormalize)
 from torch.distributions import Categorical
+from torch.utils.data import Dataset
 
+from .torch import get_module_device
 
 
 def run_episode(env, model, seed=None):
-    import torch
-    from .torch import get_module_device
+
 
     device = get_module_device(model)
 
@@ -46,9 +55,7 @@ def run_episode(env, model, seed=None):
 
 
 def record_episode(env, model, seed=None, fps=30):
-    import tempfile
-    import imageio
-    import numpy as np
+
 
     if callable(env): env, _, _ = env(env_kwargs=dict(render_mode="rgb_array"))
 
@@ -59,14 +66,11 @@ def record_episode(env, model, seed=None, fps=30):
 
 
 def render_episode(env, model, seed=None, fps=30):
-    from IPython.display import Video
     video_path = record_episode(env, model, seed=seed, fps=fps)
     return Video(video_path, embed=True)
 
 
 def build_pl_callback(callback_id, *args, **kwargs):
-    import pytorch_lightning as pl
-
     class EvalEpisodeAndRecordCallback(pl.Callback):
         def __init__(self, every_n_episodes=10, fps=30, seed=None):
             self.every_n_episodes = every_n_episodes
@@ -75,8 +79,7 @@ def build_pl_callback(callback_id, *args, **kwargs):
             super().__init__()
 
         def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-            import wandb
-            from tsilva_notebook_utils.gymnasium import record_episode
+            
 
             if getattr(pl_module, "episode_steps") != 0: return
             episode = getattr(pl_module, "episode")
@@ -515,9 +518,7 @@ v.addEventListener('dblclick', () => {{
     return HTML(html)
 
 def build_env(env_id, n_envs=1, seed=None, norm_obs=False, norm_reward=False):
-    import multiprocessing
-    from stable_baselines3.common.env_util import make_vec_env
-    from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, SubprocVecEnv
+    
     if n_envs == 'auto': n_envs = multiprocessing.cpu_count()
     vec_env_cls = SubprocVecEnv if n_envs > 1 else DummyVecEnv
     env = make_vec_env(env_id, n_envs=n_envs, seed=seed, vec_env_cls=vec_env_cls)
@@ -526,7 +527,6 @@ def build_env(env_id, n_envs=1, seed=None, norm_obs=False, norm_reward=False):
 
 
 def set_random_seed(seed):
-    from stable_baselines3.common.utils import set_random_seed as _set_random_seed
     _set_random_seed(seed)
 
 
@@ -543,7 +543,6 @@ def log_env_info(env) -> None:
       Env ID, observation/action space, (reward range if available),
       max episode steps.
     """
-    from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 
     # ─────────────────────────────── helpers ──────────────────────────────────────
     def _compact(arr: np.ndarray) -> str:
@@ -615,22 +614,9 @@ def log_env_info(env) -> None:
     print(f"  Max episode steps: {max_steps}")
 
 
-from __future__ import annotations
 
-from typing import List, Optional, Tuple
 
-import numpy as np
-import torch
-from torch.distributions import Categorical
-import numpy as np
-import torch
-from torch.distributions import Categorical
-from typing import Optional, Tuple, Union, Sequence
 
-from typing import Optional, Sequence, Tuple
-import numpy as np
-import torch
-from torch.distributions import Categorical
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -794,7 +780,6 @@ def group_trajectories_by_episode(trajectories):
     return episodes
 
 
-from torch.utils.data import Dataset
 
 # TODO: should dataloader move to gpu?
 class RolloutDataset(Dataset):

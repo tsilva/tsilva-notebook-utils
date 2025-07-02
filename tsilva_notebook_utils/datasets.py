@@ -1,9 +1,12 @@
-import torch
+import json
 import random
+from typing import Any, Callable
+
 import numpy as np
-from PIL import Image
+import torch
 from datasets import Dataset
-from typing import Callable, Any
+from PIL import Image
+from torchvision.transforms.functional import to_tensor
 
 
 class AugmentedImageDataset(Dataset):
@@ -74,8 +77,6 @@ class ShiftedDataset(Dataset):
 
 
 def process_images(images, mode="color", quantize_colors=None, scale=1.0, crop_paddings=None, noise_factor=0.0, return_type="pt"):
-    from torchvision.transforms.functional import to_tensor
-
     processed = []
     for image in images:
         # Crop if needed
@@ -115,7 +116,6 @@ def process_images(images, mode="color", quantize_colors=None, scale=1.0, crop_p
             raise ValueError(f"Unsupported color mode: {mode}")
 
         if return_type == "pt":
-            import torch
             image_ts = to_tensor(image).to(dtype=torch.float16)
             processed.append(image_ts)
         elif return_type == "np":
@@ -134,7 +134,6 @@ def dedupe_dataset(dataset, feature_key: str, hash_func: Callable[[Any], bytes] 
         elif isinstance(value, str):
             return value.encode("utf-8")
         else:
-            import json
             return json.dumps(value, sort_keys=True).encode("utf-8")
 
     _hash_func = hash_func or default_hash_func

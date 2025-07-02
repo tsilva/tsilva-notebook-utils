@@ -1,18 +1,20 @@
+import torch
+from huggingface_hub import HfApi, create_repo, login, upload_file, whoami
+from huggingface_hub.utils import RepositoryNotFoundError
+
+from .torch import get_gpu_stats
+
+
 def huggingface_login(token: str):
-    from huggingface_hub import login, whoami
     login(token=token)
     return whoami()
 
 def print_trainer_summary(result):
-    from .torch import get_gpu_stats
     print(f"Time: {result.metrics['train_runtime']:.2f}")
     print(f"Samples/second: {result.metrics['train_samples_per_second']:.2f}")
     for key, value in get_gpu_stats().items(): print(f"{key}: {value:.4f}")
 
 def hf_create_or_get_repo(repo_name: str, private: bool = True) -> str:
-    from huggingface_hub import create_repo, HfApi
-    from huggingface_hub.utils import RepositoryNotFoundError
-
     api = HfApi()
     
     try:
@@ -27,9 +29,6 @@ def hf_create_or_get_repo(repo_name: str, private: bool = True) -> str:
         return repo_url
 
 def hf_push_model_to_hub(repo_id: str, model, model_file_name="model.pt", private: bool = True):
-    import torch
-    from huggingface_hub import upload_file
-    
     hf_create_or_get_repo(repo_id, private=private)
 
     torch.save(model.state_dict(), model_file_name)

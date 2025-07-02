@@ -1,6 +1,8 @@
 
+import requests
+
+
 def send_popdesk_notification(url, auth_token, title, message):
-    import requests
     
     headers = {
         "Authorization": f"Bearer {auth_token}",
