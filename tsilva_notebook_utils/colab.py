@@ -1,11 +1,27 @@
-def disconnect_after_timeout(timeout_seconds=None): 
-    # Skip if not in Google Colab
-    try: import google.colab
-    except: return
+import os
+import re
+import time
+import unicodedata
 
-    import time
-    from tqdm import tqdm
-    from google.colab import runtime
+from dotenv import load_dotenv
+from tqdm import tqdm
+
+try:  # noqa: SIM105
+    import google.colab  # type: ignore
+    from google.colab import _message, runtime, userdata  # type: ignore
+    IN_COLAB = True
+except Exception:  # noqa: BLE001
+    IN_COLAB = False
+    _message = None
+    runtime = None
+    userdata = None
+
+from .notifications import send_popdesk_notification
+
+
+def disconnect_after_timeout(timeout_seconds=None):
+    if not IN_COLAB:
+        return
 
       # Default to 5 minutes if not specified
     if timeout_seconds is None: timeout_seconds = 60 * 5
@@ -24,9 +40,8 @@ def disconnect_after_timeout(timeout_seconds=None):
     print("Idle timeout reached. Disconnecting runtime...")
     runtime.unassign()
 
-def notify_and_disconnect_after_timeout(message="Notebook execution finished!", timeout_seconds=None):  
-    import os
-    from .notifications import send_popdesk_notification
+def notify_and_disconnect_after_timeout(message="Notebook execution finished!", timeout_seconds=None):
+    
     
     notebook_id = os.getenv("NOTEBOOK_ID"); assert notebook_id is not None, "NOTEBOOK_ID environment variable is not set"
     notification_url = os.getenv("NOTIFICATION_URL"); assert notification_url is not None, "NOTIFICATION_URL environment variable is not set"
@@ -45,18 +60,14 @@ def notify_and_disconnect_after_timeout(message="Notebook execution finished!", 
 
 
 def load_secrets_into_env(keys):
-    import os
-    from dotenv import load_dotenv
     load_dotenv(override=True)
 
     try:
-        from google.colab import userdata
         for key in keys:
             value = userdata.get(key)
             assert value, f"Key {key} not found in userdata"
             os.environ[key] = value
-    except:
-        from dotenv import load_dotenv
+    except Exception:
         load_dotenv(override=True)
 
     values = []
@@ -67,13 +78,9 @@ def load_secrets_into_env(keys):
 
 
 def notebook_id_from_title():
-    # Skip if not in Google Colab
-    try: import google.colab
-    except: return
+    if not IN_COLAB:
+        return
 
-    import re
-    import unicodedata
-    from google.colab import _message
 
     def _slugify(value):
         value = str(value)

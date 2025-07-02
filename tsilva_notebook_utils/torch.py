@@ -1,4 +1,13 @@
+import random
+from collections import OrderedDict
+
+import numpy as np
 import torch
+import torch.nn as nn
+import torchvision.utils as vutils
+from PIL import Image
+from torchvision.transforms.functional import to_pil_image
+
 
 def get_default_device():
     if torch.backends.mps.is_available() and torch.backends.mps.is_built(): return torch.device("mps")
@@ -73,7 +82,7 @@ def apply_weight_init(model, weight_init, nonlinearity):
     model : torch.nn.Module
         The model with initialized weights and biases.
     """
-    import torch.nn as nn
+    
 
     for name, param in model.named_parameters():
         if 'weight' in name:
@@ -156,11 +165,7 @@ def get_conv_filter_images(model, nrow=8, padding=1, scale=4):
     Returns:
         dict: {layer_name: PIL.Image}
     """
-    import torch
-    import torchvision.utils as vutils
-    from torchvision.transforms.functional import to_pil_image
-    from collections import OrderedDict
-    from PIL import Image
+
 
     filter_images = OrderedDict()
     
@@ -216,9 +221,7 @@ def create_infinite_data_loader():
 
 
 def seed_everything(seed: int):
-    import random
-    import numpy as np
-    import torch
+
     
     random.seed(seed)
     np.random.seed(seed)

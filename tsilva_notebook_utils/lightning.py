@@ -1,17 +1,18 @@
 import os
+import tempfile
 import time
-import torch
-import numpy as np
 from typing import Union
-import pytorch_lightning as pl
-import matplotlib.pyplot as plt
-from torchvision.datasets import MNIST
-from torchvision.datasets import CIFAR10
-from torch.utils.data import DataLoader
-from torchvision.transforms import v2
-from torchvision.transforms import ToPILImage
-from tsilva_notebook_utils.video import save_tensor_frames, create_video_from_frames
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pytorch_lightning as pl
+import torch
+from torch.utils.data import DataLoader
+from torchvision.datasets import CIFAR10, MNIST
+from torchvision.transforms import ToPILImage, v2
+
+from tsilva_notebook_utils.video import (create_video_from_frames,
+                                         save_tensor_frames)
 
 DATASET_SPECS = {
     "imagenet": {
@@ -156,8 +157,6 @@ def create_dataset_transforms(
 class ImageDataLoader(DataLoader):
 
     def render_video(self, n_batches=1, n_images=None, **kwargs):
-        import tempfile
-
         images = []
         for _ in range(n_batches):
             batch = next(iter(self))
@@ -358,7 +357,6 @@ class BaseDataModule(pl.LightningDataModule):
         return DataLoader(subset, batch_size=self.batch_size, shuffle=False, num_workers=num_workers, **kwargs)
 
     def render_transforms(self, split="train", n_samples=10, shuffle=True, fps=1, scale=4):
-        from torchvision.transforms import v2
         skip_normalize_fn=lambda x: x if not isinstance(x, v2.Normalize) else None
         with self.no_augmentations(filter=skip_normalize_fn):
             dataloader_fn = getattr(self, f"{split}_dataloader")
@@ -502,13 +500,10 @@ def render_samples_per_class(dm, n_samples=5, split='train'):
 
 
 def seed_everything(*args, workers=True, **kwargs):
-    import pytorch_lightning as pl
     return pl.seed_everything(*args, workers=workers, **kwargs)
 
 
 def overfit_batches(model, datamodule, overfit_batches=1):
-    import pytorch_lightning as pl
-
     trainer = pl.Trainer(
         overfit_batches=overfit_batches,
         max_epochs=100,
