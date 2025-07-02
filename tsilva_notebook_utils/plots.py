@@ -1,6 +1,22 @@
 
+import base64
+from io import BytesIO
+from typing import Any, Callable, List, Optional, Union
+
+import matplotlib.pyplot as plt
 import numpy as np
-from typing import Union, List, Optional, Any, Callable
+import seaborn as sns
+import torch
+import umap
+from bokeh.io import output_notebook
+from bokeh.models import ColumnDataSource, HoverTool
+from bokeh.plotting import figure, show
+from PIL.Image import Image
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+
+from .numpy import reshape_vector_to_grid, to_numpy
+
 
 def plot_line(
     data,
@@ -8,8 +24,7 @@ def plot_line(
     xlabel='X-axis', 
     ylabel='Y-axis',
     figsize=(12, 6)
-):
-    import matplotlib.pyplot as plt
+): 
 
     # Create a new figure for plotting
     plt.figure(figsize=figsize)
@@ -32,8 +47,7 @@ def plot_series(
     ylabel='Y-axis',
     figsize=(12, 6)
 ):
-    import numpy as np
-    import matplotlib.pyplot as plt
+    
 
     # Ensure data is a NumPy array
     data = np.array(data)
@@ -67,7 +81,7 @@ def plot_histogram(
     title='Histogram', 
     bins=50
 ):
-    import matplotlib.pyplot as plt
+    
 
     plt.hist(data, bins=bins)
     plt.title(title)
@@ -88,7 +102,7 @@ def plot_series_over_indices(
     xlabel='Index',
     ylabel='Value'
 ):
-    import numpy as np
+    
 
     # Stack the data from the map into a 2D array (shape: indices x series)
     data_array = np.vstack(list(data_map.values())).T
@@ -111,7 +125,7 @@ def plot_snapshots_over_indices(
     serieslabel='Series',
     num_snapshots=5
 ):
-    import numpy as np
+    
 
     total_indices = len(data[key])
     snapshot_indices = np.linspace(0, total_indices - 1, num=num_snapshots, dtype=int)
@@ -155,12 +169,9 @@ def plot_embeddings_with_inputs(
         random_state: Random seed.
         **embed_kwargs: Passed to the embedding transformer.
     """
-    from bokeh.plotting import figure, show
-    from bokeh.models import ColumnDataSource, HoverTool
-    from sklearn.manifold import TSNE
+    
 
     if output_notebook:
-        from bokeh.io import output_notebook
         output_notebook()
 
     if raw_inputs is None or len(raw_inputs) == 0:
@@ -174,13 +185,10 @@ def plot_embeddings_with_inputs(
     if isinstance(embedding_method, str):
         embedding_method = embedding_method.lower()
         if embedding_method == "tsne":
-            from sklearn.manifold import TSNE
             embedder = TSNE(n_components=2, random_state=random_state, **embed_kwargs)
         elif embedding_method == "umap":
-            import umap
             embedder = umap.UMAP(n_components=2, random_state=random_state, **embed_kwargs)
         elif embedding_method == "pca":
-            from sklearn.decomposition import PCA
             embedder = PCA(n_components=2, **embed_kwargs)
         else:
             raise ValueError(f"Unsupported method: {embedding_method}")
@@ -190,9 +198,7 @@ def plot_embeddings_with_inputs(
 
     # --- Input Renderer ---
     def default_renderer(inp):
-        from PIL.Image import Image
-        from io import BytesIO
-        import base64
+        
         if isinstance(inp, Image):
             buf = BytesIO(); inp.save(buf, format="PNG")
             b64 = base64.b64encode(buf.getvalue()).decode()
@@ -245,10 +251,7 @@ def plot_vector_batch_heatmap(
     """
     Returns the matplotlib Figure object of the heatmap.
     """
-    from .numpy import to_numpy
-    import numpy as np
-    import seaborn as sns
-    from matplotlib import pyplot as plt
+    
 
     data = to_numpy(tensor_batch)
 
@@ -288,9 +291,7 @@ def plot_tensor_stats_heatmaps(
     stats=["raw", "mean", "median", "std", "var"],
     **heatmap_kwargs
 ):  
-    import torch
-    from matplotlib import pyplot as plt
-    from .numpy import reshape_vector_to_grid
+    
 
     
     assert isinstance(tensor_batch, torch.Tensor), "Input must be a PyTorch tensor"

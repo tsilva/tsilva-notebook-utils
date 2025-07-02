@@ -1,12 +1,13 @@
+import base64
 import os
 import re
-import cv2
-import base64
-import torch
 import tempfile
-from torchvision.transforms import ToPILImage
-from IPython.display import HTML
+
+import cv2
 import imageio_ffmpeg as ffmpeg
+import torch
+from IPython.display import HTML
+from torchvision.transforms import ToPILImage
 
 
 def save_tensor_frames(frames, output_dir, ext="jpg", start_index=0):

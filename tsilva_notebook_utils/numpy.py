@@ -1,9 +1,11 @@
+import numpy as np
+import torch
+
+
 def to_numpy(data):
     """
     Converts input to a NumPy array. Handles PyTorch tensors.
     """
-    import torch
-    import numpy as np
     
     if isinstance(data, torch.Tensor): return data.detach().cpu().numpy()
     return np.asarray(data)
@@ -13,7 +15,6 @@ def reshape_vector_to_grid(vector, max_width=16):
     Reshape a 1D NumPy array (or 1D tensor) to 2D grid for visualization.
     Pads with zeros if needed to make it fit the grid.
     """
-    import numpy as np
 
     vector = to_numpy(vector)
 
