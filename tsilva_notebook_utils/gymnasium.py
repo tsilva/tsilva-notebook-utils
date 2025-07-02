@@ -18,6 +18,7 @@ import torch
 from torch.distributions import Categorical
 
 
+
 def run_episode(env, model, seed=None):
     import torch
     from .torch import get_module_device
@@ -528,3 +529,284 @@ def set_random_seed(seed):
     from stable_baselines3.common.utils import set_random_seed as _set_random_seed
     _set_random_seed(seed)
 
+
+def log_env_info(env) -> None:
+    """
+    Print key attributes of an environment or a vec-env.
+
+    Handles:
+      • Plain or wrapped Gym/Gymnasium envs
+      • DummyVecEnv  (stores sub-envs locally)
+      • SubprocVecEnv (sub-envs live in worker processes, accessed via RPC)
+
+    Fields printed:
+      Env ID, observation/action space, (reward range if available),
+      max episode steps.
+    """
+    from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
+
+    # ─────────────────────────────── helpers ──────────────────────────────────────
+    def _compact(arr: np.ndarray) -> str:
+        """Return a 1-D array as '[a, b, c]' with exactly one space after commas."""
+        def fmt(x):
+            if np.isposinf(x):
+                return "inf"
+            if np.isneginf(x):
+                return "-inf"
+            return f"{x:.3g}"          # 3 significant digits, no extra padding
+        return "[" + ", ".join(fmt(v) for v in arr.ravel()) + "]"
+
+
+    def _fmt_space(space) -> str:
+        """Pretty-print Box / Discrete / etc. with compact low/high arrays."""
+        if hasattr(space, "low") and hasattr(space, "high"):
+            low  = _compact(space.low)
+            high = _compact(space.high)
+            return (f"{space.__class__.__name__}"
+                    f"(low={low}, high={high}, shape={space.shape}, dtype={space.dtype})")
+        return str(space)
+
+    # 1) Detect vec-env type and pick a sub-env handle when possible
+    if isinstance(env, DummyVecEnv):
+        vec_kind, n = "DummyVecEnv", len(env.envs)
+        base_env    = env.envs[0]                  # local object
+    elif isinstance(env, SubprocVecEnv):
+        vec_kind, n = "SubprocVecEnv", env.num_envs
+        base_env    = None                         # must query via RPC
+    else:
+        vec_kind, n = None, 1                      # single or wrapped env
+        base_env    = env
+
+    # 2) Safe remote attribute fetcher for SubprocVecEnv
+    def remote_attr(name):
+        if not isinstance(env, SubprocVecEnv):
+            return None
+        try:
+            return env.get_attr(name, indices=0)[0]
+        except Exception:
+            return None                            # Attribute missing ➞ None
+
+    # 3) Gather ID, max-steps, reward range
+    if base_env is not None:                       # DummyVecEnv or plain env
+        spec       = getattr(base_env, "spec", None)
+        env_id     = getattr(spec, "id", None) or getattr(base_env, "id", "Unknown")
+        max_steps  = getattr(spec, "max_episode_steps", None) \
+                     or getattr(base_env, "_max_episode_steps", "Unknown")
+        reward_rng = getattr(base_env, "reward_range", None)  # Gym only
+    else:                                          # SubprocVecEnv
+        spec       = remote_attr("spec")
+        env_id     = getattr(spec, "id", None) or remote_attr("id") or "Unknown"
+        max_steps  = getattr(spec, "max_episode_steps", None) \
+                     or remote_attr("_max_episode_steps") or "Unknown"
+        reward_rng = None                          # don’t fetch reward_range remotely
+
+    # 4) Observation / action spaces are exposed on the vec-env itself
+    obs_space = env.observation_space
+    act_space = env.action_space
+
+    # 5) Print results
+    header = f"Environment Info ({vec_kind} with {n} envs)" if vec_kind else "Environment Info"
+    print(header)
+    print(f"  Env ID: {env_id}")
+    print(f"  Observation space: {_fmt_space(obs_space)}")
+    print(f"  Action space: {_fmt_space(act_space)}")
+    if reward_rng is not None:
+        print(f"  Reward range: {reward_rng}")
+    print(f"  Max episode steps: {max_steps}")
+
+
+from __future__ import annotations
+
+from typing import List, Optional, Tuple
+
+import numpy as np
+import torch
+from torch.distributions import Categorical
+import numpy as np
+import torch
+from torch.distributions import Categorical
+from typing import Optional, Tuple, Union, Sequence
+
+from typing import Optional, Sequence, Tuple
+import numpy as np
+import torch
+from torch.distributions import Categorical
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+
+def _device_of(module: torch.nn.Module) -> torch.device:  # type: ignore
+    """Return the device of *module*'s first parameter."""
+    return next(module.parameters()).device
+
+
+# -----------------------------------------------------------------------------
+# Rollout collector (env‑major)
+# -----------------------------------------------------------------------------
+
+def collect_rollouts(
+    env,
+    policy_model: torch.nn.Module,
+    value_model: Optional[torch.nn.Module] = None,
+    n_steps: int = 1024,
+    deterministic: bool = False,
+    gamma: float = 0.99,
+    lam: float = 0.95,
+    normalize_advantage: bool = True,
+    adv_norm_eps: float = 1e-8,
+    collect_frames: bool = False,
+):
+    """Collect *n_steps* transitions from *env* in parallel and return env‑major tensors."""
+
+    device: torch.device = _device_of(policy_model)
+    n_envs: int = env.num_envs
+
+    # ------------------------------------------------------------------
+    # 1. Buffers (time, env) for easy appending during rollout
+    # ------------------------------------------------------------------
+    obs_buf: list[np.ndarray] = []       # build list first, stack later
+    act_buf = np.zeros((n_steps, n_envs), np.int64)
+    rew_buf = np.zeros((n_steps, n_envs), np.float32)
+    done_buf = np.zeros((n_steps, n_envs), bool)
+    logp_buf = np.zeros((n_steps, n_envs), np.float32)
+    val_buf = np.zeros((n_steps, n_envs), np.float32)
+    frame_buf: list[Sequence[np.ndarray]] | None = [] if collect_frames else None
+
+    # ------------------------------------------------------------------
+    # 2. Rollout
+    # ------------------------------------------------------------------
+    obs = env.reset()
+    for t in range(n_steps):
+        obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device)
+        with torch.no_grad(): logits = policy_model(obs_t)
+        dist = Categorical(logits=logits)
+
+        act_t = logits.argmax(-1) if deterministic else dist.sample()
+        logp_t = dist.log_prob(act_t)
+        val_t = (
+            value_model(obs_t).squeeze(-1) if value_model is not None else torch.zeros(n_envs, device=device)
+        )
+
+        next_obs, reward, done, infos = env.step(act_t.cpu().numpy())
+
+        # store
+        obs_buf.append(obs.copy())
+        act_buf[t], rew_buf[t], done_buf[t] = act_t.cpu().numpy(), reward, done
+        logp_buf[t] = logp_t.detach().cpu().numpy()
+        val_buf[t] = val_t.detach().cpu().numpy()
+
+        if collect_frames and frame_buf is not None:
+            frame_buf.append(env.get_images())
+
+        obs = next_obs
+
+    # ------------------------------------------------------------------
+    # 3. Bootstrap value for the next state of each env
+    # ------------------------------------------------------------------
+    with torch.no_grad():
+        obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device)
+        next_values = (
+            value_model(obs_t).squeeze(-1).cpu().numpy()
+            if value_model is not None else np.zeros(n_envs, dtype=np.float32)
+        )
+
+    # ------------------------------------------------------------------
+    # 4. GAE‑λ advantage / return (with correct masking)
+    # ------------------------------------------------------------------
+    adv_buf = np.zeros_like(rew_buf)
+    ret_buf = np.zeros_like(rew_buf)
+
+    gae = np.zeros(n_envs, dtype=np.float32)
+    next_non_terminal = 1.0 - done_buf[-1].astype(np.float32)
+    next_value = next_values
+
+    for t in reversed(range(n_steps)):
+        delta = rew_buf[t] + gamma * next_value * next_non_terminal - val_buf[t]
+        gae = delta + gamma * lam * next_non_terminal * gae
+        adv_buf[t] = gae
+
+        next_non_terminal = 1.0 - done_buf[t].astype(np.float32)
+        next_value = val_buf[t]
+
+    ret_buf = adv_buf + val_buf
+
+    if normalize_advantage:
+        adv_flat = adv_buf.reshape(-1)
+        adv_buf = (adv_buf - adv_flat.mean()) / (adv_flat.std() + adv_norm_eps)
+
+    # ------------------------------------------------------------------
+    # 5. Env‑major flattening: (time, env, …) -> (env, time, …) -> (env*time, …)
+    # ------------------------------------------------------------------
+    obs_arr = np.stack(obs_buf)                       # (T, E, obs)
+    obs_env_major = obs_arr.transpose(1, 0, 2)        # (E, T, obs)
+    states = torch.as_tensor(obs_env_major.reshape(n_envs * n_steps, -1), dtype=torch.float32)
+
+    def _flat_env_major(arr: np.ndarray, dtype: torch.dtype):
+        return torch.as_tensor(arr.transpose(1, 0).reshape(-1), dtype=dtype)
+
+    actions = _flat_env_major(act_buf, torch.int64)
+    rewards = _flat_env_major(rew_buf, torch.float32)
+    dones = _flat_env_major(done_buf, torch.bool)
+    logps = _flat_env_major(logp_buf, torch.float32)
+    values = _flat_env_major(val_buf, torch.float32)
+    advs = _flat_env_major(adv_buf, torch.float32)
+    returns = _flat_env_major(ret_buf, torch.float32)
+
+    if collect_frames and frame_buf is not None:
+        # frame_buf is list[T] where each item is list[E] of images
+        frames_env_major: list[np.ndarray] = []
+        for e in range(n_envs):
+            for t in range(n_steps):
+                frames_env_major.append(frame_buf[t][e])
+    else:
+        frames_env_major = [0] * (n_envs * n_steps)
+
+    # ------------------------------------------------------------------
+    # 6. Return in the SB3‑compatible order
+    # ------------------------------------------------------------------
+    return (
+        states,
+        actions,
+        rewards,
+        dones,
+        logps,
+        values,
+        advs,
+        returns,
+        frames_env_major,
+    )
+
+def group_trajectories_by_episode(trajectories):
+    episodes = []
+    episode = []
+
+    T = trajectories[0].shape[0]  # number of time steps
+
+    for t in range(T):
+        step = tuple(x[t] for x in trajectories)  # (state, action, reward, done, ...)
+        episode.append(step)
+        done = step[3]
+        if done.item():  # convert tensor to bool
+            episodes.append(episode)
+            episode = []
+
+    return episodes
+
+
+from torch.utils.data import Dataset
+
+# TODO: should dataloader move to gpu?
+class RolloutDataset(Dataset):
+    """Holds PPO roll-out tensors and lets them be swapped in-place."""
+    def __init__(self):
+        self.trajectories = None 
+
+    def update(self, *trajectories):
+        self.trajectories = trajectories
+
+    def __len__(self):
+        return len(self.trajectories[0])
+
+    def __getitem__(self, idx):
+        return tuple(t[idx] for t in self.trajectories)

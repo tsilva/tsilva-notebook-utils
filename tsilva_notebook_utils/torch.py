@@ -1,6 +1,11 @@
 import torch
-import random
 
+def get_default_device():
+    if torch.backends.mps.is_available() and torch.backends.mps.is_built(): return torch.device("mps")
+    elif torch.cuda.is_available(): return torch.device("cuda")
+    else: return torch.device("cpu")
+
+# TODO: deprecate this function in favor of get_default_device()
 def get_current_device():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return device
