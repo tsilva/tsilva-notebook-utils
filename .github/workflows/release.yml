@@ -48,6 +48,11 @@ jobs:
           bump2version ${{ github.event.inputs.release_type }}
           echo "NEW_VERSION=$(grep 'version = ' pyproject.toml | sed 's/.*version = "\([^"]*\)".*/\1/')" >> $GITHUB_ENV
 
+      - name: Push changes and tags
+        run: |
+          git push origin main
+          git push origin --tags
+
       - name: Build package
         run: python -m build
 

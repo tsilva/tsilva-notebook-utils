@@ -78,7 +78,7 @@ This project uses automated version bumping with `bump2version`. Version numbers
 Use the provided scripts for local development:
 
 ```bash
-# Bump patch version (0.0.115 → 0.0.117)
+# Bump patch version (0.0.115 → 0.0.118)
 make bump-patch
 # or
 python bump_version.py patch
@@ -102,16 +102,16 @@ python bump_version.py major
 2. Select "Release and Publish" workflow
 3. Click "Run workflow"
 4. Choose your release type:
-   - **patch**: Bug fixes (0.0.115 → 0.0.117)
+   - **patch**: Bug fixes (0.0.115 → 0.0.118)
    - **minor**: New features (0.0.115 → 0.1.0)
    - **major**: Breaking changes (0.0.115 → 1.0.0)
-   - **prerelease**: Beta versions (0.0.115 → 0.0.117-alpha.1)
+   - **prerelease**: Beta versions (0.0.115 → 0.0.118-alpha.1)
 5. Click "Run workflow"
 
 **What happens automatically:**
 - ✅ Version bumped in `pyproject.toml` and `__init__.py`
 - ✅ Git commit created with version bump message
-- ✅ Git tag created (e.g., `v0.0.117`)
+- ✅ Git tag created (e.g., `v0.0.118`)
 - ✅ Package built and published to [PyPI](https://pypi.org/project/tsilva-notebook-utils/)
 - ✅ GitHub release created with release notes
 
