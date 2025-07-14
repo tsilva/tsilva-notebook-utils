@@ -441,6 +441,7 @@ def collect_rollouts(
     normalize_advantage: bool = True,
     adv_norm_eps: float = 1e-8,
     collect_frames: bool = False,
+    last_obs: Optional[np.ndarray] = None
 ) -> Tuple[torch.Tensor, ...]:
     """Collect transitions from *env* until *n_steps* or *n_episodes* (whichever
     comes first) are reached.
@@ -469,6 +470,9 @@ def collect_rollouts(
         Numerical stability epsilon for advantage normalisation.
     collect_frames : bool, default False
         If ``True``, return RGB frames alongside transition tensors.
+    last_obs : np.ndarray | None, default None
+        If provided, use these observations to continue collection without
+        resetting the environment. If ``None``, reset the environment first.
 
     Returns
     -------
@@ -509,7 +513,7 @@ def collect_rollouts(
     # ------------------------------------------------------------------
     # 2. Rollout
     # ------------------------------------------------------------------
-    obs = env.reset()
+    obs = env.reset() if last_obs is None else last_obs
     while True:
         obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device)
         with torch.no_grad():

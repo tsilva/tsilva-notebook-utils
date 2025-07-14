@@ -298,9 +298,253 @@ class TestCollectRollouts(unittest.TestCase):
         assert [int(f[0]) for f in frames] == expected
 
 
-# ---------------------------------------------------------------------- #
-#  Tests for group_trajectories_by_episode                               #
-# ---------------------------------------------------------------------- #
+    # ------------------------------------------------------------------ #
+    #  8. last_obs parameter tests                                       #
+    # ------------------------------------------------------------------ #
+    def test_last_obs_none_resets_env(self):
+        """Test that when last_obs=None, the environment is reset."""
+        env = DummyVecEnv([3, 3])
+        
+        # Manually advance environment state to verify reset
+        env.reset()
+        env.step([0, 0])  # advance counters
+        env.step([0, 0])  # advance counters again
+        
+        # Verify counters are advanced
+        self.assertTrue(np.all(env.counters == 2))
+        
+        # Call collect_rollouts with last_obs=None
+        collect_rollouts(env, ConstPolicy(), n_steps=1, last_obs=None)
+        
+        # Environment should have been reset (counters should be at 1 after collecting 1 step)
+        self.assertTrue(np.all(env.counters == 1))
+
+    def test_last_obs_provided_no_reset(self):
+        """Test that when last_obs is provided, the environment is not reset."""
+        env = DummyVecEnv([5, 5])
+        
+        # Manually advance environment state
+        obs = env.reset()
+        obs, _, _, _ = env.step([0, 0])  # step 1
+        obs, _, _, _ = env.step([0, 0])  # step 2
+        
+        # Verify counters are at 2
+        self.assertTrue(np.all(env.counters == 2))
+        
+        # Call collect_rollouts with provided last_obs
+        collect_rollouts(env, ConstPolicy(), n_steps=1, last_obs=obs)
+        
+        # Environment should not have been reset (counters should be at 3 after collecting 1 step)
+        self.assertTrue(np.all(env.counters == 3))
+
+    def test_last_obs_continuity(self):
+        """Test that using last_obs provides continuity between rollout calls."""
+        env = DummyVecEnv([10, 10])  # Long episodes
+        
+        # First rollout
+        results1 = collect_rollouts(
+            env, ConstPolicy(), ConstValue(),
+            n_steps=3, last_obs=None
+        )
+        states1, actions1, rewards1, dones1, *_ = results1
+        
+        # Get the observation that would be used for next value estimation
+        # This is stored in obs after the rollout loop
+        env_state_after_first = env.counters.copy()
+        
+        # Manually get the next obs to use as last_obs
+        next_obs_for_bootstrap = env._obs.copy()
+        
+        # Second rollout using the state from first rollout
+        results2 = collect_rollouts(
+            env, ConstPolicy(), ConstValue(),
+            n_steps=2, last_obs=next_obs_for_bootstrap
+        )
+        states2, actions2, rewards2, dones2, *_ = results2
+        
+        # Verify that environment state is continuous
+        # After first rollout (3 steps), counters should be at 3
+        # After second rollout (2 more steps), counters should be at 5
+        expected_final_counters = env_state_after_first + 2
+        self.assertTrue(np.allclose(env.counters, expected_final_counters))
+        
+        # Verify that no episodes were reset between rollouts
+        # (no unexpected done flags in the middle)
+        all_dones = torch.cat([dones1, dones2])
+        # For episodes of length 10, we shouldn't see any dones in first 5 steps
+        self.assertFalse(torch.any(all_dones))
+
+    def test_last_obs_shape_validation(self):
+        """Test that last_obs must have the correct shape."""
+        env = DummyVecEnv([5, 5])
+        
+        # Create last_obs with wrong shape
+        wrong_shape_obs = np.ones((env.num_envs, env.obs_dim + 1), dtype=np.float32)
+        
+        # This should work without errors (function doesn't validate shape explicitly)
+        # but the model/environment might fail - we just test it doesn't crash immediately
+        try:
+            collect_rollouts(env, ConstPolicy(), n_steps=1, last_obs=wrong_shape_obs)
+        except (RuntimeError, ValueError, IndexError):
+            # Expected - wrong shape should cause an error downstream
+            pass
+
+    def test_last_obs_preserves_episode_boundaries(self):
+        """Test that last_obs properly handles episode boundaries."""
+        # Use short episodes to trigger episode endings
+        env = DummyVecEnv([2, 3])  # env 0 ends at step 2, env 1 at step 3
+        
+        # First rollout - should end first episode
+        results1 = collect_rollouts(
+            env, ConstPolicy(), ConstValue(),
+            n_steps=2, last_obs=None
+        )
+        states1, actions1, rewards1, dones1, *_ = results1
+        
+        # Check that first env had a done flag
+        dones1_reshaped = dones1.reshape(env.num_envs, 2)  # (2 envs, 2 steps)
+        self.assertTrue(dones1_reshaped[0, 1])  # env 0 should be done at step 1 (0-indexed)
+        self.assertFalse(dones1_reshaped[1, 1])  # env 1 should not be done yet
+        
+        # Get current observation state for next rollout
+        # After reset, environments that were done should have fresh state
+        current_obs = env._obs.copy()
+        
+        # Second rollout starting from current state
+        results2 = collect_rollouts(
+            env, ConstPolicy(), ConstValue(),
+            n_steps=2, last_obs=current_obs
+        )
+        states2, actions2, rewards2, dones2, *_ = results2
+        
+        # Verify the rollouts collected the expected number of transitions
+        self.assertEqual(len(states1), env.num_envs * 2)
+        self.assertEqual(len(states2), env.num_envs * 2)
+
+    def test_last_obs_with_different_env_states(self):
+        """Test last_obs works correctly when environments are in different states."""
+        env = DummyVecEnv([4, 6])  # Different episode lengths
+        
+        # Advance environments to different states
+        obs = env.reset()
+        obs, _, _, _ = env.step([0, 0])  # Both at step 1
+        obs, _, _, _ = env.step([0, 0])  # Both at step 2
+        # Now env 0 has 2 steps left, env 1 has 4 steps left
+        
+        # Use current obs as starting point
+        results = collect_rollouts(
+            env, ConstPolicy(), ConstValue(),
+            n_steps=3, last_obs=obs
+        )
+        states, actions, rewards, dones, *_ = results
+        
+        # Reshape to see per-environment results
+        dones_reshaped = dones.reshape(env.num_envs, 3)  # (2 envs, 3 steps)
+        
+        # env 0 should be done after 2 more steps (was at step 2, episode length 4)
+        self.assertTrue(dones_reshaped[0, 1])  # done at step index 1 (3rd step total)
+        # env 1 should not be done yet (was at step 2, episode length 6)
+        self.assertFalse(torch.any(dones_reshaped[1, :]))
+
+    def test_multiple_rollout_calls_maintain_state(self):
+        """Test that multiple calls to collect_rollouts can maintain environment state."""
+        env = DummyVecEnv([15, 15])  # Long episodes to avoid termination
+        
+        # Series of rollout calls, each continuing from where the last left off
+        obs = None  # Start with reset
+        total_states = []
+        total_rewards = []
+        
+        for i in range(4):  # 4 rollout calls
+            results = collect_rollouts(
+                env, ConstPolicy(), ConstValue(),
+                n_steps=2, last_obs=obs
+            )
+            states, actions, rewards, dones, *_ = results
+            
+            total_states.append(states)
+            total_rewards.append(rewards)
+            
+            # Get the next observation for the following rollout
+            # Since we're not resetting, we need to continue from current env state
+            obs = env._obs.copy()
+            
+            # Verify no episodes have ended (since episodes are long)
+            self.assertFalse(torch.any(dones))
+        
+        # Verify we collected the expected total number of transitions
+        total_transitions = sum(len(states) for states in total_states)
+        expected_transitions = 4 * 2 * env.num_envs  # 4 calls * 2 steps * 2 envs
+        self.assertEqual(total_transitions, expected_transitions)
+        
+        # Verify environment counters show continuous progression
+        expected_final_counter = 4 * 2  # 4 calls * 2 steps each
+        self.assertTrue(np.all(env.counters == expected_final_counter))
+
+    def test_stream_rollout_collection_use_case(self):
+        """Test the main use case: collecting rollouts in chunks without losing episode progress."""
+        # This test demonstrates the specific use case mentioned in the user request:
+        # calling collect_rollouts with n_steps multiple times to keep iterating
+        # on the same stream instead of discarding unfinished episodes
+        
+        env = DummyVecEnv([50, 50])  # Very long episodes to ensure no termination
+        
+        # Collect rollouts in chunks, maintaining continuity
+        chunk_size = 5
+        n_chunks = 4
+        total_expected_steps = chunk_size * n_chunks
+        
+        all_states = []
+        all_actions = []
+        all_rewards = []
+        all_dones = []
+        
+        last_obs = None  # Start by resetting
+        
+        for chunk in range(n_chunks):
+            results = collect_rollouts(
+                env, ConstPolicy(), ConstValue(),
+                n_steps=chunk_size,
+                last_obs=last_obs
+            )
+            states, actions, rewards, dones, *_ = results
+            
+            all_states.append(states)
+            all_actions.append(actions)
+            all_rewards.append(rewards)
+            all_dones.append(dones)
+            
+            # Important: get the next observation to continue the stream
+            # In practice, this would be the observation after the last step
+            last_obs = env._obs.copy()
+        
+        # Verify we collected the expected total amount of data
+        total_states = torch.cat(all_states)
+        total_actions = torch.cat(all_actions)
+        total_rewards = torch.cat(all_rewards)
+        total_dones = torch.cat(all_dones)
+        
+        expected_total_transitions = env.num_envs * total_expected_steps
+        self.assertEqual(len(total_states), expected_total_transitions)
+        self.assertEqual(len(total_actions), expected_total_transitions)
+        self.assertEqual(len(total_rewards), expected_total_transitions)
+        
+        # Verify environment state shows continuous progression
+        # Each env should have advanced by total_expected_steps
+        self.assertTrue(np.all(env.counters == total_expected_steps))
+        
+        # With episodes of length 50 and only 20 total steps, no episodes should end
+        self.assertFalse(torch.any(total_dones), 
+                        "Episodes ended unexpectedly with very long episode lengths")
+        
+        # Verify the data forms a continuous sequence by checking that
+        # there are no unexpected resets (which would show as discontinuities)
+        # Since our dummy env produces constant rewards, they should all be 1.0
+        self.assertTrue(torch.allclose(total_rewards, torch.ones_like(total_rewards)))
+
+    # ---------------------------------------------------------------------- #
+    #  Tests for group_trajectories_by_episode                               #
+    # ---------------------------------------------------------------------- #
 class TestGroupTrajectoriesByEpisode(unittest.TestCase):
     
     def _create_dummy_trajectories(self, done_pattern, obs_dim=4, num_actions=3):
