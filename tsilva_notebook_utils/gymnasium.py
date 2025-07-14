@@ -337,7 +337,6 @@ def build_env(env_id, n_envs=1, seed=None, norm_obs=False, norm_reward=False):
     if norm_obs or norm_reward: env = VecNormalize(env, norm_obs=norm_obs, norm_reward=norm_reward)
     return env
 
-
 def set_random_seed(seed):
     from stable_baselines3.common.utils import set_random_seed as _set_random_seed
 

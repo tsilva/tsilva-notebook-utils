@@ -5,7 +5,9 @@ import torch
 
 import pytest
 from typing import Optional
-from tsilva_notebook_utils.gymnasium import collect_rollouts, group_trajectories_by_episode        # ← adjust to your package
+from tsilva_notebook_utils.gymnasium import collect_rollouts, group_trajectories_by_episode, build_env        # ← adjust to your package
+import multiprocessing
+from unittest.mock import patch, MagicMock
 
 
 # ---------------------------------------------------------------------- #
@@ -520,6 +522,461 @@ class TestGroupTrajectoriesByEpisode(unittest.TestCase):
         
         with self.assertRaises(AttributeError):
             group_trajectories_by_episode(trajectories)
+
+
+# ---------------------------------------------------------------------- #
+#  Tests for build_env function                                           #
+# ---------------------------------------------------------------------- #
+class TestBuildEnv(unittest.TestCase):
+    """Test cases for the build_env function."""
+
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_single_env_default_params(self, mock_make_vec_env):
+        """Test build_env with default parameters (single environment)."""
+        from stable_baselines3.common.vec_env import DummyVecEnv
+        
+        # Mock the return value
+        mock_env = MagicMock()
+        mock_make_vec_env.return_value = mock_env
+        
+        # Call build_env with minimal parameters
+        result = build_env('CartPole-v1')
+        
+        # Verify make_vec_env was called with correct parameters
+        mock_make_vec_env.assert_called_once_with(
+            'CartPole-v1', 
+            n_envs=1, 
+            seed=None, 
+            vec_env_cls=DummyVecEnv
+        )
+        
+        # Verify the result is the mock environment (no normalization)
+        self.assertEqual(result, mock_env)
+
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_multiple_envs(self, mock_make_vec_env):
+        """Test build_env with multiple environments (should use SubprocVecEnv)."""
+        from stable_baselines3.common.vec_env import SubprocVecEnv
+        
+        mock_env = MagicMock()
+        mock_make_vec_env.return_value = mock_env
+        
+        # Call with multiple environments
+        result = build_env('CartPole-v1', n_envs=4)
+        
+        # Should use SubprocVecEnv for multiple environments
+        mock_make_vec_env.assert_called_once_with(
+            'CartPole-v1',
+            n_envs=4,
+            seed=None,
+            vec_env_cls=SubprocVecEnv
+        )
+        
+        self.assertEqual(result, mock_env)
+
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    @patch('multiprocessing.cpu_count')
+    def test_build_env_auto_n_envs(self, mock_cpu_count, mock_make_vec_env):
+        """Test build_env with n_envs='auto' (should use CPU count)."""
+        from stable_baselines3.common.vec_env import SubprocVecEnv
+        
+        # Mock CPU count
+        mock_cpu_count.return_value = 8
+        mock_env = MagicMock()
+        mock_make_vec_env.return_value = mock_env
+        
+        # Call with auto n_envs
+        result = build_env('CartPole-v1', n_envs='auto')
+        
+        # Should use CPU count and SubprocVecEnv
+        mock_make_vec_env.assert_called_once_with(
+            'CartPole-v1',
+            n_envs=8,
+            seed=None,
+            vec_env_cls=SubprocVecEnv
+        )
+        
+        self.assertEqual(result, mock_env)
+
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_with_seed(self, mock_make_vec_env):
+        """Test build_env with seed parameter."""
+        from stable_baselines3.common.vec_env import DummyVecEnv
+        
+        mock_env = MagicMock()
+        mock_make_vec_env.return_value = mock_env
+        
+        # Call with seed
+        result = build_env('CartPole-v1', seed=42)
+        
+        # Verify seed is passed through
+        mock_make_vec_env.assert_called_once_with(
+            'CartPole-v1',
+            n_envs=1,
+            seed=42,
+            vec_env_cls=DummyVecEnv
+        )
+        
+        self.assertEqual(result, mock_env)
+
+    @patch('stable_baselines3.common.vec_env.VecNormalize')
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_with_obs_normalization(self, mock_make_vec_env, mock_vec_normalize):
+        """Test build_env with observation normalization."""
+        mock_base_env = MagicMock()
+        mock_normalized_env = MagicMock()
+        mock_make_vec_env.return_value = mock_base_env
+        mock_vec_normalize.return_value = mock_normalized_env
+        
+        # Call with observation normalization
+        result = build_env('CartPole-v1', norm_obs=True)
+        
+        # Verify VecNormalize was called with correct parameters
+        mock_vec_normalize.assert_called_once_with(
+            mock_base_env,
+            norm_obs=True,
+            norm_reward=False
+        )
+        
+        # Should return the normalized environment
+        self.assertEqual(result, mock_normalized_env)
+
+    @patch('stable_baselines3.common.vec_env.VecNormalize')
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_with_reward_normalization(self, mock_make_vec_env, mock_vec_normalize):
+        """Test build_env with reward normalization."""
+        mock_base_env = MagicMock()
+        mock_normalized_env = MagicMock()
+        mock_make_vec_env.return_value = mock_base_env
+        mock_vec_normalize.return_value = mock_normalized_env
+        
+        # Call with reward normalization
+        result = build_env('CartPole-v1', norm_reward=True)
+        
+        # Verify VecNormalize was called with correct parameters
+        mock_vec_normalize.assert_called_once_with(
+            mock_base_env,
+            norm_obs=False,
+            norm_reward=True
+        )
+        
+        # Should return the normalized environment
+        self.assertEqual(result, mock_normalized_env)
+
+    @patch('stable_baselines3.common.vec_env.VecNormalize')
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_with_both_normalizations(self, mock_make_vec_env, mock_vec_normalize):
+        """Test build_env with both observation and reward normalization."""
+        mock_base_env = MagicMock()
+        mock_normalized_env = MagicMock()
+        mock_make_vec_env.return_value = mock_base_env
+        mock_vec_normalize.return_value = mock_normalized_env
+        
+        # Call with both normalizations
+        result = build_env('CartPole-v1', norm_obs=True, norm_reward=True)
+        
+        # Verify VecNormalize was called with both flags
+        mock_vec_normalize.assert_called_once_with(
+            mock_base_env,
+            norm_obs=True,
+            norm_reward=True
+        )
+        
+        # Should return the normalized environment
+        self.assertEqual(result, mock_normalized_env)
+
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_no_normalization(self, mock_make_vec_env):
+        """Test build_env without normalization (norm_obs=False, norm_reward=False)."""
+        mock_env = MagicMock()
+        mock_make_vec_env.return_value = mock_env
+        
+        # Call without normalization (explicit False)
+        result = build_env('CartPole-v1', norm_obs=False, norm_reward=False)
+        
+        # Should return the original environment without wrapping
+        self.assertEqual(result, mock_env)
+
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_single_env_boundary(self, mock_make_vec_env):
+        """Test build_env with n_envs=1 (boundary case for DummyVecEnv)."""
+        from stable_baselines3.common.vec_env import DummyVecEnv
+        
+        mock_env = MagicMock()
+        mock_make_vec_env.return_value = mock_env
+        
+        # Call with exactly 1 environment
+        result = build_env('CartPole-v1', n_envs=1)
+        
+        # Should use DummyVecEnv (not SubprocVecEnv)
+        mock_make_vec_env.assert_called_once_with(
+            'CartPole-v1',
+            n_envs=1,
+            seed=None,
+            vec_env_cls=DummyVecEnv
+        )
+
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_multiple_envs_boundary(self, mock_make_vec_env):
+        """Test build_env with n_envs=2 (boundary case for SubprocVecEnv)."""
+        from stable_baselines3.common.vec_env import SubprocVecEnv
+        
+        mock_env = MagicMock()
+        mock_make_vec_env.return_value = mock_env
+        
+        # Call with 2 environments (> 1)
+        result = build_env('CartPole-v1', n_envs=2)
+        
+        # Should use SubprocVecEnv
+        mock_make_vec_env.assert_called_once_with(
+            'CartPole-v1',
+            n_envs=2,
+            seed=None,
+            vec_env_cls=SubprocVecEnv
+        )
+
+    @patch('stable_baselines3.common.vec_env.VecNormalize')
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_all_parameters(self, mock_make_vec_env, mock_vec_normalize):
+        """Test build_env with all parameters specified."""
+        from stable_baselines3.common.vec_env import SubprocVecEnv
+        
+        mock_base_env = MagicMock()
+        mock_normalized_env = MagicMock()
+        mock_make_vec_env.return_value = mock_base_env
+        mock_vec_normalize.return_value = mock_normalized_env
+        
+        # Call with all parameters
+        result = build_env(
+            env_id='Pendulum-v1',
+            n_envs=4,
+            seed=123,
+            norm_obs=True,
+            norm_reward=True
+        )
+        
+        # Verify make_vec_env call
+        mock_make_vec_env.assert_called_once_with(
+            'Pendulum-v1',
+            n_envs=4,
+            seed=123,
+            vec_env_cls=SubprocVecEnv
+        )
+        
+        # Verify VecNormalize call
+        mock_vec_normalize.assert_called_once_with(
+            mock_base_env,
+            norm_obs=True,
+            norm_reward=True
+        )
+        
+        # Should return normalized environment
+        self.assertEqual(result, mock_normalized_env)
+
+    def test_build_env_env_id_parameter_types(self):
+        """Test build_env with different env_id parameter types."""
+        with patch('stable_baselines3.common.env_util.make_vec_env') as mock_make_vec_env:
+            mock_env = MagicMock()
+            mock_make_vec_env.return_value = mock_env
+            
+            # Test with string
+            build_env('CartPole-v1')
+            mock_make_vec_env.assert_called_with(
+                'CartPole-v1',
+                n_envs=1,
+                seed=None,
+                vec_env_cls=unittest.mock.ANY
+            )
+            
+            # Reset mock
+            mock_make_vec_env.reset_mock()
+            
+            # Test with different string
+            build_env('LunarLander-v2')
+            mock_make_vec_env.assert_called_with(
+                'LunarLander-v2',
+                n_envs=1,
+                seed=None,
+                vec_env_cls=unittest.mock.ANY
+            )
+
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_seed_parameter_types(self, mock_make_vec_env):
+        """Test build_env with different seed parameter types."""
+        mock_env = MagicMock()
+        mock_make_vec_env.return_value = mock_env
+        
+        # Test with integer seed
+        build_env('CartPole-v1', seed=42)
+        mock_make_vec_env.assert_called_with(
+            'CartPole-v1',
+            n_envs=1,
+            seed=42,
+            vec_env_cls=unittest.mock.ANY
+        )
+        
+        # Reset mock
+        mock_make_vec_env.reset_mock()
+        
+        # Test with None seed
+        build_env('CartPole-v1', seed=None)
+        mock_make_vec_env.assert_called_with(
+            'CartPole-v1',
+            n_envs=1,
+            seed=None,
+            vec_env_cls=unittest.mock.ANY
+        )
+
+    def test_build_env_integration_imports(self):
+        """Test that build_env imports work correctly (integration test)."""
+        # This test verifies that the function can import required modules
+        try:
+            from stable_baselines3.common.env_util import make_vec_env
+            from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNormalize
+        except ImportError as e:
+            self.skipTest(f"Required dependencies not available: {e}")
+        
+        # If imports work, the function should be callable (even if it fails on environment creation)
+        # We just test that it doesn't fail on import
+        from tsilva_notebook_utils.gymnasium import build_env
+        self.assertTrue(callable(build_env))
+
+
+# ---------------------------------------------------------------------- #
+#  Tests for build_env function (alias for build_env)                    #
+# ---------------------------------------------------------------------- #
+class TestMakeEnv(unittest.TestCase):
+    """Test cases for the build_env function (which is an alias for build_env)."""
+
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_basic_functionality(self, mock_make_vec_env):
+        """Test that build_env works as an alias for build_env."""
+        from stable_baselines3.common.vec_env import DummyVecEnv
+        
+        mock_env = MagicMock()
+        mock_make_vec_env.return_value = mock_env
+        
+        # Call build_env with basic parameters
+        result = build_env('CartPole-v1')
+        
+        # Should behave exactly like build_env
+        mock_make_vec_env.assert_called_once_with(
+            'CartPole-v1',
+            n_envs=1,
+            seed=None,
+            vec_env_cls=DummyVecEnv
+        )
+        
+        self.assertEqual(result, mock_env)
+
+    @patch('stable_baselines3.common.vec_env.VecNormalize')
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_all_parameters(self, mock_make_vec_env, mock_vec_normalize):
+        """Test build_env with all parameters (should behave like build_env)."""
+        from stable_baselines3.common.vec_env import SubprocVecEnv
+        
+        mock_base_env = MagicMock()
+        mock_normalized_env = MagicMock()
+        mock_make_vec_env.return_value = mock_base_env
+        mock_vec_normalize.return_value = mock_normalized_env
+        
+        # Call build_env with all parameters
+        result = build_env(
+            env_id='Pendulum-v1',
+            n_envs=4,
+            seed=123,
+            norm_obs=True,
+            norm_reward=True
+        )
+        
+        # Should call make_vec_env with correct parameters
+        mock_make_vec_env.assert_called_once_with(
+            'Pendulum-v1',
+            n_envs=4,
+            seed=123,
+            vec_env_cls=SubprocVecEnv
+        )
+        
+        # Should also apply VecNormalize
+        mock_vec_normalize.assert_called_once_with(
+            mock_base_env,
+            norm_obs=True,
+            norm_reward=True
+        )
+        
+        self.assertEqual(result, mock_normalized_env)
+
+    @patch('stable_baselines3.common.vec_env.VecNormalize')
+    @patch('stable_baselines3.common.env_util.make_vec_env')
+    def test_build_env_with_normalization(self, mock_make_vec_env, mock_vec_normalize):
+        """Test build_env with normalization (should behave like build_env)."""
+        mock_base_env = MagicMock()
+        mock_normalized_env = MagicMock()
+        mock_make_vec_env.return_value = mock_base_env
+        mock_vec_normalize.return_value = mock_normalized_env
+        
+        # Call build_env with normalization
+        result = build_env('CartPole-v1', norm_obs=True, norm_reward=True)
+        
+        # Should apply VecNormalize wrapper
+        mock_vec_normalize.assert_called_once_with(
+            mock_base_env,
+            norm_obs=True,
+            norm_reward=True
+        )
+        
+        self.assertEqual(result, mock_normalized_env)
+
+    def test_build_env_signature_compatibility(self):
+        """Test that build_env has the same signature as build_env."""
+        import inspect
+        
+        # Get function signatures
+        build_env_sig = inspect.signature(build_env)
+        build_env_sig = inspect.signature(build_env)
+        
+        # Parameters should be identical
+        self.assertEqual(
+            list(build_env_sig.parameters.keys()),
+            list(build_env_sig.parameters.keys())
+        )
+        
+        # Default values should be identical
+        for param_name in build_env_sig.parameters:
+            build_env_param = build_env_sig.parameters[param_name]
+            build_env_param = build_env_sig.parameters[param_name]
+            self.assertEqual(build_env_param.default, build_env_param.default)
+
+    @patch('tsilva_notebook_utils.gymnasium.build_env')
+    def test_build_env_calls_build_env(self, mock_build_env):
+        """Test that build_env actually calls build_env internally."""
+        mock_env = MagicMock()
+        mock_build_env.return_value = mock_env
+        
+        # Call build_env
+        result = build_env('CartPole-v1', n_envs=2, seed=42, norm_obs=True)
+        
+        # Should call build_env with same parameters
+        mock_build_env.assert_called_once_with(
+            env_id='CartPole-v1',
+            n_envs=2,
+            seed=42,
+            norm_obs=True,
+            norm_reward=False
+        )
+        
+        self.assertEqual(result, mock_env)
+
+    def test_build_env_exists_and_callable(self):
+        """Test that build_env function exists and is callable."""
+        from tsilva_notebook_utils.gymnasium import build_env
+        self.assertTrue(callable(build_env))
+
+    def test_build_env_docstring(self):
+        """Test that build_env has proper documentation."""
+        from tsilva_notebook_utils.gymnasium import build_env
+        self.assertIsNotNone(build_env.__doc__)
+        self.assertIn("alias for build_env", build_env.__doc__)
 
 
 if __name__ == "__main__":
