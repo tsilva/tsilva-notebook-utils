@@ -53,6 +53,115 @@ send_popdesk_notification(
 )
 ```
 
-## 📄 License
+## � Development & Releases
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/tsilva/tsilva-notebook-utils.git
+cd tsilva-notebook-utils
+
+# Install in development mode
+pip install -e .
+
+# Run tests
+python -m pytest tests/
+```
+
+### Version Management
+
+This project uses automated version bumping with `bump2version`. Version numbers are automatically updated across all relevant files.
+
+#### Local Version Bumping
+
+Use the provided scripts for local development:
+
+```bash
+# Bump patch version (0.0.115 → 0.0.116)
+make bump-patch
+# or
+python bump_version.py patch
+
+# Bump minor version (0.0.115 → 0.1.0)
+make bump-minor
+# or
+python bump_version.py minor
+
+# Bump major version (0.0.115 → 1.0.0)
+make bump-major
+# or
+python bump_version.py major
+```
+
+#### Automated Releases
+
+**🎯 Recommended: GitHub Actions Release Workflow**
+
+1. Go to the [GitHub Actions](../../actions) tab
+2. Select "Release and Publish" workflow
+3. Click "Run workflow"
+4. Choose your release type:
+   - **patch**: Bug fixes (0.0.115 → 0.0.116)
+   - **minor**: New features (0.0.115 → 0.1.0)
+   - **major**: Breaking changes (0.0.115 → 1.0.0)
+   - **prerelease**: Beta versions (0.0.115 → 0.0.116-alpha.1)
+5. Click "Run workflow"
+
+**What happens automatically:**
+- ✅ Version bumped in `pyproject.toml` and `__init__.py`
+- ✅ Git commit created with version bump message
+- ✅ Git tag created (e.g., `v0.0.116`)
+- ✅ Package built and published to [PyPI](https://pypi.org/project/tsilva-notebook-utils/)
+- ✅ GitHub release created with release notes
+
+#### Manual Release Process
+
+If you prefer manual control:
+
+```bash
+# 1. Bump version locally
+make bump-patch  # or bump-minor, bump-major
+
+# 2. Build the package
+make build
+
+# 3. Publish to PyPI (requires PYPI_API_TOKEN)
+make publish
+```
+
+### Release Notes
+
+Recent releases can be found on the [Releases page](../../releases).
+
+#### Version History
+- **v0.0.115**: Current version with automated release workflow
+- **v0.0.114**: Previous stable version
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests (`make test`)
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+### Available Make Commands
+
+```bash
+make help          # Show all available commands
+make install       # Install package in development mode
+make test          # Run tests
+make bump-patch    # Bump patch version
+make bump-minor    # Bump minor version
+make bump-major    # Bump major version
+make build         # Build the package
+make publish       # Build and publish to PyPI
+make clean         # Clean build artifacts
+```
+
+## �📄 License
 
 This project is licensed under the [MIT License](LICENSE).
