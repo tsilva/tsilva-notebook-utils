@@ -95,12 +95,12 @@ class TestCollectRollouts(unittest.TestCase):
     def test_stop_by_n_steps(self):
         env   = DummyVecEnv([10, 10])   # long episodes
         steps = 4
-        res   = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), ConstValue(),
             n_steps=steps, n_episodes=None,
             deterministic=True, collect_frames=False
         )
-        states, actions, rewards, dones, *_ = res
+        (states, actions, rewards, dones, *_), metadata = result
         output_lengths((states, actions, rewards, dones), env, T=steps)
         # exactly 'steps' timesteps collected
         self.assertEqual(dones.view(-1).shape[0], env.num_envs * steps)
@@ -108,34 +108,35 @@ class TestCollectRollouts(unittest.TestCase):
     # -------------------- Stop after n_episodes only ------------------ #
     def test_stop_by_n_episodes(self):
         env = DummyVecEnv([3, 5])   # 1st env ends at t=3, 2nd at t=5
-        res = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), ConstValue(),
             n_steps=None, n_episodes=1,   # first episode across ANY env
             deterministic=True
         )
         # first env finishes in 3 steps → T=3
         T = 3
-        states, actions, *_ = res[:4]
+        (states, actions, *_), metadata = result
         output_lengths((states, actions), env, T)
 
     # ----------------- Both limits – earlier one wins ----------------- #
     def test_both_limits(self):
         env = DummyVecEnv([6, 6])
-        res = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), ConstValue(),
             n_steps=4, n_episodes=10,    # n_steps triggers first
         )
-        states = res[0]
+        (states, *_), metadata = result
         self.assertEqual(states.shape[0], env.num_envs * 4)
 
     # --------------- No value net & no advantage normalisation -------- #
     def test_value_none_no_norm(self):
         env = DummyVecEnv([2])
-        (states, actions, rewards, dones,
-         logps, values, advs, returns, _) = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), value_model=None,
             n_steps=2, normalize_advantage=False
         )
+        (states, actions, rewards, dones,
+         logps, values, advs, returns, _), metadata = result
         # Values should all be 0; therefore returns==advs
         self.assertTrue(torch.allclose(advs, returns))
         # logps produced by uniform categorical (all zeros logits) → -log(3)
@@ -147,9 +148,10 @@ class TestCollectRollouts(unittest.TestCase):
     # ------------------- Frame collection branch on ------------------ #
     def test_collect_frames_on(self):
         env = DummyVecEnv([1, 1])
-        *_, frames = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), n_steps=1, collect_frames=True
         )
+        (*_, frames), metadata = result
         # should have placeholder RGB frames, not zeros
         self.assertIsInstance(frames[0], np.ndarray)
         self.assertEqual(frames[0].shape[-1], 3)
@@ -157,21 +159,24 @@ class TestCollectRollouts(unittest.TestCase):
     # ------------------ Frame collection branch off ------------------ #
     def test_collect_frames_off(self):
         env = DummyVecEnv([1])
-        *_, frames = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), n_steps=1, collect_frames=False
         )
+        (*_, frames), metadata = result
         # should be list of zeros
         self.assertEqual(frames, [0])
 
     # ---------------------- Stochastic actions path ------------------ #
     def test_sampling_mode(self):
         env = DummyVecEnv([2])
-        _, actions1, *_ = collect_rollouts(
+        result1 = collect_rollouts(
             env, ConstPolicy(), n_steps=2, deterministic=False
         )
-        _, actions2, *_ = collect_rollouts(
+        (_, actions1, *_), metadata1 = result1
+        result2 = collect_rollouts(
             env, ConstPolicy(), n_steps=2, deterministic=False
         )
+        (_, actions2, *_), metadata2 = result2
         # Very small chance they match exactly – use it as a heuristic
         self.assertFalse(torch.equal(actions1, actions2))
 
@@ -181,11 +186,11 @@ class TestCollectRollouts(unittest.TestCase):
     def test_n_episodes_wins(self):
         env = DummyVecEnv([2, 2])           # every env ends at t = 2
         # Give a very *large* step budget – episode limit should stop first
-        res = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), ConstValue(),
             n_steps=999, n_episodes=1
         )
-        states = res[0]
+        (states, *_), metadata = result
         # Only 2 timesteps (t=0,1) collected from each env → 4 transitions
         assert states.shape[0] == 4
 
@@ -195,10 +200,11 @@ class TestCollectRollouts(unittest.TestCase):
     # ------------------------------------------------------------------ #
     def test_advantage_standardisation(self):
         env = DummyVecEnv([5, 5])           # 10 samples for stability
-        _, _, _, _, _, _, advs, _, _ = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), ConstValue(),
             n_steps=5, normalize_advantage=True
         )
+        (_, _, _, _, _, _, advs, _, _), metadata = result
         mu  = advs.mean().item()
         # unbiased=False → population standard deviation
         std = advs.std(unbiased=False).item()
@@ -221,10 +227,11 @@ class TestCollectRollouts(unittest.TestCase):
         class ZeroValue(ConstValue):
             def forward(self, x): return torch.zeros(x.shape[0], 1)
 
-        *_, advs, _, _ = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), ZeroValue(),
             n_steps=2, normalize_advantage=True
         )
+        (*_, advs, _, _), metadata = result
         # Should all be 0, and crucially not NaN / inf
         assert torch.allclose(advs, torch.zeros_like(advs), atol=0, rtol=0)
         assert not torch.isnan(advs).any()
@@ -235,10 +242,11 @@ class TestCollectRollouts(unittest.TestCase):
     # ------------------------------------------------------------------ #
     def test_gae_resets_after_done(self):
         env = DummyVecEnv([1, 3])           # env-0 terminates immediately
-        *_ , advs, _, _ = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), ConstValue(),
             n_steps=3, normalize_advantage=False
         )
+        (*_ , advs, _, _), metadata = result
         advs = advs.reshape(2, 3)           # (E, T)
         # post-done advantages should be ~0 up to 1e-6
         assert torch.all(advs[0, 1:].abs() < 1e-6)
@@ -249,8 +257,8 @@ class TestCollectRollouts(unittest.TestCase):
     # ------------------------------------------------------------------ #
     def test_flatten_dtypes(self):
         env = DummyVecEnv([1])
-        outs = collect_rollouts(env, ConstPolicy(), n_steps=1)
-        states, actions, rewards, dones, logps, values, *_ = outs
+        result = collect_rollouts(env, ConstPolicy(), n_steps=1)
+        (states, actions, rewards, dones, logps, values, *_), metadata = result
         assert actions.dtype   == torch.int64
         assert rewards.dtype   == torch.float32
         assert dones.dtype     == torch.bool
@@ -263,9 +271,10 @@ class TestCollectRollouts(unittest.TestCase):
     # ------------------------------------------------------------------ #
     def test_single_env(self):
         env = DummyVecEnv([4])               # num_envs == 1
-        states, _, _, _, _, _, _, _, _ = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), n_steps=4
         )
+        (states, _, _, _, _, _, _, _, _), metadata = result
         # Shape should be (T, obs_dim) = (4, 4)
         assert states.shape == (4, env.obs_dim)
 
@@ -288,9 +297,10 @@ class TestCollectRollouts(unittest.TestCase):
                 return out
 
         env = CountingEnv()
-        *_, frames = collect_rollouts(
+        result = collect_rollouts(
             env, ConstPolicy(), n_steps=2, collect_frames=True
         )
+        (*_, frames), metadata = result
         # After env-major flattening we expect [0, 2, 1, 3]
         #   Explanation: frame 0 & 1 were t=0, env-0/env-1
         #                frame 2 & 3 were t=1, env-0/env-1
@@ -346,7 +356,7 @@ class TestCollectRollouts(unittest.TestCase):
             env, ConstPolicy(), ConstValue(),
             n_steps=3, last_obs=None
         )
-        states1, actions1, rewards1, dones1, *_ = results1
+        (states1, actions1, rewards1, dones1, *_), metadata1 = results1
         
         # Get the observation that would be used for next value estimation
         # This is stored in obs after the rollout loop
@@ -360,7 +370,7 @@ class TestCollectRollouts(unittest.TestCase):
             env, ConstPolicy(), ConstValue(),
             n_steps=2, last_obs=next_obs_for_bootstrap
         )
-        states2, actions2, rewards2, dones2, *_ = results2
+        (states2, actions2, rewards2, dones2, *_), metadata2 = results2
         
         # Verify that environment state is continuous
         # After first rollout (3 steps), counters should be at 3
@@ -399,7 +409,7 @@ class TestCollectRollouts(unittest.TestCase):
             env, ConstPolicy(), ConstValue(),
             n_steps=2, last_obs=None
         )
-        states1, actions1, rewards1, dones1, *_ = results1
+        (states1, actions1, rewards1, dones1, *_), metadata1 = results1
         
         # Check that first env had a done flag
         dones1_reshaped = dones1.reshape(env.num_envs, 2)  # (2 envs, 2 steps)
@@ -415,7 +425,7 @@ class TestCollectRollouts(unittest.TestCase):
             env, ConstPolicy(), ConstValue(),
             n_steps=2, last_obs=current_obs
         )
-        states2, actions2, rewards2, dones2, *_ = results2
+        (states2, actions2, rewards2, dones2, *_), metadata2 = results2
         
         # Verify the rollouts collected the expected number of transitions
         self.assertEqual(len(states1), env.num_envs * 2)
@@ -436,7 +446,7 @@ class TestCollectRollouts(unittest.TestCase):
             env, ConstPolicy(), ConstValue(),
             n_steps=3, last_obs=obs
         )
-        states, actions, rewards, dones, *_ = results
+        (states, actions, rewards, dones, *_), metadata = results
         
         # Reshape to see per-environment results
         dones_reshaped = dones.reshape(env.num_envs, 3)  # (2 envs, 3 steps)
@@ -460,7 +470,7 @@ class TestCollectRollouts(unittest.TestCase):
                 env, ConstPolicy(), ConstValue(),
                 n_steps=2, last_obs=obs
             )
-            states, actions, rewards, dones, *_ = results
+            (states, actions, rewards, dones, *_), metadata = results
             
             total_states.append(states)
             total_rewards.append(rewards)
@@ -507,7 +517,7 @@ class TestCollectRollouts(unittest.TestCase):
                 n_steps=chunk_size,
                 last_obs=last_obs
             )
-            states, actions, rewards, dones, *_ = results
+            (states, actions, rewards, dones, *_), metadata = results
             
             all_states.append(states)
             all_actions.append(actions)
@@ -541,6 +551,67 @@ class TestCollectRollouts(unittest.TestCase):
         # there are no unexpected resets (which would show as discontinuities)
         # Since our dummy env produces constant rewards, they should all be 1.0
         self.assertTrue(torch.allclose(total_rewards, torch.ones_like(total_rewards)))
+
+    def test_metadata_contains_expected_info(self):
+        """Test that metadata dictionary contains expected keys and values."""
+        env = DummyVecEnv([5, 5])
+        steps = 3
+        
+        result = collect_rollouts(
+            env, ConstPolicy(), ConstValue(),
+            n_steps=steps, n_episodes=None,
+            deterministic=True
+        )
+        trajectories, metadata = result
+        
+        # Verify metadata structure
+        self.assertIsInstance(metadata, dict)
+        self.assertIn('last_obs', metadata)
+        self.assertIn('n_steps', metadata)
+        self.assertIn('n_episodes', metadata)
+        
+        # Verify metadata values
+        self.assertEqual(metadata['n_steps'], steps)
+        self.assertIsInstance(metadata['n_episodes'], (int, np.integer))
+        self.assertGreaterEqual(metadata['n_episodes'], 0)
+        
+        # Verify last_obs shape matches environment
+        last_obs = metadata['last_obs']
+        self.assertEqual(last_obs.shape, (env.num_envs, env.obs_dim))
+        self.assertEqual(last_obs.dtype, np.float32)
+
+    def test_metadata_last_obs_usage(self):
+        """Test that metadata['last_obs'] can be used to continue rollouts."""
+        env = DummyVecEnv([10, 10])  # Long episodes
+        
+        # First rollout
+        result1 = collect_rollouts(
+            env, ConstPolicy(), ConstValue(),
+            n_steps=3, last_obs=None
+        )
+        trajectories1, metadata1 = result1
+        
+        # Use last_obs from first rollout to continue
+        result2 = collect_rollouts(
+            env, ConstPolicy(), ConstValue(),
+            n_steps=2, last_obs=metadata1['last_obs']
+        )
+        trajectories2, metadata2 = result2
+        
+        # Verify continuity - environment should have progressed 5 steps total
+        self.assertTrue(np.all(env.counters == 5))
+        
+        # Verify we got expected number of steps in each rollout
+        self.assertEqual(metadata1['n_steps'], 3)
+        self.assertEqual(metadata2['n_steps'], 2)
+        
+        # Verify trajectory shapes match expected
+        states1, *_ = trajectories1
+        states2, *_ = trajectories2
+        expected_transitions1 = env.num_envs * 3
+        expected_transitions2 = env.num_envs * 2
+        self.assertEqual(len(states1), expected_transitions1)
+        self.assertEqual(len(states2), expected_transitions2)
 
     # ---------------------------------------------------------------------- #
     #  Tests for group_trajectories_by_episode                               #

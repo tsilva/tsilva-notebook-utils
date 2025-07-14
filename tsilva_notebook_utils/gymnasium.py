@@ -637,7 +637,7 @@ def collect_rollouts(
         advs,
         returns,
         frames_env_major,
-    )
+    ), dict(last_obs=obs, n_steps=T, n_episodes=episode_count)
 
 
 def group_trajectories_by_episode(trajectories):
