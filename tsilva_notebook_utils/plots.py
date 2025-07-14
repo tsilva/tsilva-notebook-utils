@@ -2,8 +2,7 @@
 import base64
 from io import BytesIO
 from typing import Any, Callable, List, Optional, Union
-
-
+import numpy as np
 
 from .numpy import reshape_vector_to_grid, to_numpy
 
