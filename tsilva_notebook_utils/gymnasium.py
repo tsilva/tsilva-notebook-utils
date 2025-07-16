@@ -675,6 +675,7 @@ class RolloutDataset(TorchDataset):
 
 
 
+import copy
 import time
 import multiprocessing
 import threading
@@ -803,7 +804,8 @@ class AsyncRolloutCollector(BaseRolloutCollector):
     def is_ready_for_initial_rollout(self):
         """Check if ready for initial rollout collection"""
         return self.policy_state_dict is not None and self.value_state_dict is not None
-
+    
+    # TODO: models must be provided externally
     def _init_models(self):
         """Initialize models in the worker thread"""
         if self.env is None:
