@@ -679,9 +679,6 @@ import time
 import multiprocessing
 import threading
 import queue
-import copy
-from collections import deque
-from tsilva_notebook_utils.gymnasium import RolloutDataset, collect_rollouts, group_trajectories_by_episode
 
 class BaseRolloutCollector:
     """Base class for rollout collectors"""
