@@ -529,3 +529,92 @@ class StopOnLambda(pl.Callback):
         if self.condition(metrics):
             print(self.message)
             trainer.should_stop = True
+
+
+import os
+import sys, builtins, wandb
+from typing import Any
+from IPython import get_ipython
+import pytorch_lightning as pl
+from pytorch_lightning.loggers import WandbLogger
+from wandb.errors import CommError
+try:
+    from wandb.sdk.mailbox.mailbox import MailboxClosedError
+except ImportError:
+    MailboxClosedError = RuntimeError
+
+class WandbCleanup(pl.Callback):
+    """Notebook-safe cleanup for W&B + PyTorch Lightning."""
+    def __init__(self) -> None:
+        super().__init__()
+        os.environ["WANDB_SILENT"] = "True"    # before wandb.init / Lightning start
+        self._done = False
+
+    # internal helper ---------------------------------------------------
+    def _close_wandb(self, trainer: pl.Trainer) -> None:
+        if self._done:
+            return
+        self._done = True
+
+        # 1) finish any active run(s)
+        loggers = (
+            trainer.loggers
+            if hasattr(trainer, "loggers")
+            else ([trainer.logger] if trainer.logger else [])
+        )
+        for lg in loggers:
+            if isinstance(lg, WandbLogger):
+                run = getattr(lg, "experiment", None)
+                if run and not getattr(run, "_is_finished", False):
+                    try:
+                        run.finish(exit_code=-1)
+                    # swallow every “backend already dead” variant
+                    except (MailboxClosedError, CommError, BrokenPipeError, OSError):
+                        pass      
+                    except Exception as e:
+                        print(f"[WandbCleanup] run.finish() failed: {e}")
+
+        # 2) global teardown
+        try:
+            wandb.teardown()
+        except Exception:
+            pass
+
+        # 3) restore exit/quit
+        builtins.exit = sys.exit
+        builtins.quit = sys.exit
+
+        # 4) unregister IPython hooks
+        try:
+            ip = get_ipython()
+            if ip and hasattr(ip, "events"):
+                for evt in ("pre_run_cell", "post_run_cell"):
+                    for cb in list(ip.events.callbacks.get(evt, [])):
+                        if getattr(cb, "__module__", "").startswith("wandb"):
+                            ip.events.unregister(evt, cb)
+        except Exception:
+            pass
+
+    # Lightning-dispatched hooks ---------------------------------------
+    def on_keyboard_interrupt(self, trainer: pl.Trainer, *_: Any) -> None:
+        self._close_wandb(trainer)
+
+    def on_exception(
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        exception: BaseException,          # <— positional, fixes TypeError
+    ) -> None:
+        self._close_wandb(trainer)
+
+    def on_fit_end(self, trainer: pl.Trainer, *_: Any) -> None:
+        self._close_wandb(trainer)
+
+    def on_validation_end(self, trainer: pl.Trainer, *_: Any) -> None:
+        self._close_wandb(trainer)
+
+    def on_test_end(self, trainer: pl.Trainer, *_: Any) -> None:
+        self._close_wandb(trainer)
+
+    def on_predict_end(self, trainer: pl.Trainer, *_: Any) -> None:
+        self._close_wandb(trainer)
