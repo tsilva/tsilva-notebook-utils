@@ -1,5 +1,11 @@
 # 🧰 tsilva-notebook-utils
 
+[![Tests](https://github.com/tsilva/tsilva-notebook-utils/actions/workflows/tests.yml/badge.svg)](https://github.com/tsilva/tsilva-notebook-utils/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/tsilva/tsilva-notebook-utils/branch/main/graph/badge.svg)](https://codecov.io/gh/tsilva/tsilva-notebook-utils)
+[![Python Versions](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/tsilva/tsilva-notebook-utils)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![PyPI version](https://badge.fury.io/py/tsilva-notebook-utils.svg)](https://badge.fury.io/py/tsilva-notebook-utils)
+
 🔬 Handy utilities for enhancing your Jupyter and Google Colab notebooks
 
 ## 📖 Overview
@@ -143,10 +149,44 @@ Recent releases can be found on the [Releases page](../../releases).
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
-4. Run tests (`make test`)
+4. Run tests (`./run_tests.sh` or `make test`)
 5. Commit your changes (`git commit -m 'Add amazing feature'`)
 6. Push to the branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request
+
+## 🧪 Testing
+
+### Running Tests Locally
+
+```bash
+# Install test dependencies
+pip install -e .[test]
+
+# Run all tests with coverage
+./run_tests.sh
+
+# Or use pytest directly
+pytest tests/ --cov=tsilva_notebook_utils --cov-report=term-missing -v
+
+# Run specific test file
+pytest tests/test_gymnasium.py -v
+
+# Run tests for specific class
+pytest tests/test_gymnasium.py::TestSyncRolloutCollector -v
+```
+
+### Test Structure
+
+The test suite includes:
+- **Unit tests** for individual functions and classes
+- **Integration tests** for complex workflows
+- **Coverage reporting** to ensure code quality
+- **Linting checks** with flake8, black, and isort
+
+Tests are automatically run on:
+- Every push to `main` and `develop` branches
+- Every pull request
+- Multiple Python versions (3.9, 3.10, 3.11, 3.12)
 
 ### Available Make Commands
 

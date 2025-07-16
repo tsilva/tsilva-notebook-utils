@@ -92,6 +92,23 @@ wandb = [
     "torch"
 ]
 
+test = [
+    "pytest>=6.0",
+    "pytest-cov>=2.10",
+    "pytest-xvfb>=2.0",
+    "coverage>=5.0"
+]
+
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.10",
+    "pytest-xvfb>=2.0",
+    "coverage>=5.0",
+    "black>=22.0",
+    "isort>=5.0",
+    "flake8>=4.0"
+]
+
 all = [
     "google-colab",
     "python-dotenv",
@@ -114,7 +131,11 @@ all = [
     "scikit-learn",
     "opencv-python",
     "imageio-ffmpeg",
-    "openai"
+    "openai",
+    "pytest>=6.0",
+    "pytest-cov>=2.10",
+    "pytest-xvfb>=2.0",
+    "coverage>=5.0"
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -123,3 +144,63 @@ packages = ["tsilva_notebook_utils"]
 [tool.hatch.publish.index]
 url = "https://upload.pypi.org/legacy/"
 token = "env:PYPI_TOKEN"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+source = ["tsilva_notebook_utils"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if typing.TYPE_CHECKING:",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
