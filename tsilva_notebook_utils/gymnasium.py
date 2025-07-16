@@ -672,3 +672,240 @@ class RolloutDataset(TorchDataset):
 
     def __getitem__(self, idx):
         return tuple(t[idx] for t in self.trajectories)
+
+
+
+import time
+import multiprocessing
+import threading
+import queue
+import copy
+from collections import deque
+from tsilva_notebook_utils.gymnasium import RolloutDataset, collect_rollouts, group_trajectories_by_episode
+
+class BaseRolloutCollector:
+    """Base class for rollout collectors"""
+    def __init__(self, build_env_fn, config, obs_dim, act_dim):
+        self.build_env_fn = build_env_fn
+        self.config = config
+        self.obs_dim = obs_dim
+        self.act_dim = act_dim
+        self.last_obs = None
+        
+    def start(self):
+        """Start the collector"""
+        pass
+        
+    def stop(self):
+        """Stop the collector"""
+        pass
+        
+    def update_models(self, policy_state_dict, value_state_dict):
+        """Update model weights"""
+        pass
+        
+    def get_rollout(self, timeout=1.0):
+        """Get next rollout data"""
+        raise NotImplementedError
+        
+    def initialize_with_models(self, policy_model, value_model):
+        """Initialize collector with model references"""
+        pass
+
+
+class SyncRolloutCollector(BaseRolloutCollector):
+    """Synchronous rollout collector - collects data on demand"""
+    def __init__(self, build_env_fn, config, obs_dim, act_dim):
+        super().__init__(build_env_fn, config, obs_dim, act_dim)
+        self.env = build_env_fn(config.seed)
+        self.policy_model = None
+        self.value_model = None
+        self._ready_for_initial = False
+        
+    def initialize_with_models(self, policy_model, value_model):
+        """Set model references for sync collector"""
+        self.policy_model = policy_model
+        self.value_model = value_model
+        self._ready_for_initial = True
+        
+    def get_rollout(self, timeout=1.0):
+        """Collect rollout synchronously using current models"""
+        if self.policy_model is None or self.value_model is None:
+            return None
+            
+        trajectories, extras = collect_rollouts(
+            self.env,
+            self.policy_model,
+            self.value_model,
+            n_steps=self.config.train_rollout_steps,
+            last_obs=self.last_obs
+        )
+        
+        self.last_obs = extras['last_obs']
+        return trajectories
+        
+    def is_ready_for_initial_rollout(self):
+        """Check if ready for initial rollout collection"""
+        return self._ready_for_initial
+    
+
+class AsyncRolloutCollector(BaseRolloutCollector):
+    """Background thread that continuously collects rollouts using latest model weights"""
+    def __init__(self, build_env_fn, config, obs_dim, act_dim):
+        super().__init__(build_env_fn, config, obs_dim, act_dim)
+        
+        # Thread-safe queue for rollout data
+        self.rollout_queue = queue.Queue(maxsize=3)  # Buffer 3 rollouts max
+        
+        # Shared model weights (CPU copies for thread safety)
+        self.policy_state_dict = None
+        self.value_state_dict = None
+        self.model_lock = threading.Lock()
+        
+        # Control flags
+        self.running = False
+        self.thread = None
+        
+        # Create environment and models for rollout collection
+        self.env = None
+        self.policy_model = None
+        self.value_model = None
+        
+    def initialize_with_models(self, policy_model, value_model):
+        """Initialize with model state dicts for async collector"""
+        self.update_models(policy_model.state_dict(), value_model.state_dict())
+        
+    def start(self):
+        """Start the background rollout collection thread"""
+        if self.running:
+            return
+            
+        self.running = True
+        self.thread = threading.Thread(target=self._collect_loop, daemon=True)
+        self.thread.start()
+        
+    def stop(self):
+        """Stop the background rollout collection"""
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=5.0)
+            
+    def update_models(self, policy_state_dict, value_state_dict):
+        """Update model weights from main training thread"""
+        with self.model_lock:
+            self.policy_state_dict = copy.deepcopy(policy_state_dict)
+            self.value_state_dict = copy.deepcopy(value_state_dict)
+            
+    def get_rollout(self, timeout=1.0):
+        """Get next rollout data (non-blocking with timeout)"""
+        try:
+            return self.rollout_queue.get(timeout=timeout)
+        except queue.Empty:
+            return None
+            
+    def is_ready_for_initial_rollout(self):
+        """Check if ready for initial rollout collection"""
+        return self.policy_state_dict is not None and self.value_state_dict is not None
+
+    def _init_models(self):
+        """Initialize models in the worker thread"""
+        if self.env is None:
+            self.env = self.build_env_fn(self.config.seed + 1000)  # Different seed for rollout env
+        
+        if self.policy_model is None:
+            self.policy_model = PolicyNet(self.obs_dim, self.act_dim, self.config.hidden_dim)
+            self.policy_model.eval()  # Always in eval mode for rollouts
+            
+        if self.value_model is None:
+            self.value_model = ValueNet(self.obs_dim, self.config.hidden_dim)
+            self.value_model.eval()
+            
+    def _update_model_weights(self):
+        """Update local model weights from shared state dicts"""
+        with self.model_lock:
+            if self.policy_state_dict is not None:
+                self.policy_model.load_state_dict(self.policy_state_dict)
+            if self.value_state_dict is not None:
+                self.value_model.load_state_dict(self.value_state_dict)
+                
+    def _collect_loop(self):
+        """Main loop running in background thread"""
+        self._init_models()
+        
+        while self.running:
+            try:
+                # Update to latest model weights
+                self._update_model_weights()
+                
+                # Collect rollout
+                trajectories, extras = collect_rollouts(
+                    self.env,
+                    self.policy_model,
+                    self.value_model,
+                    n_steps=self.config.train_rollout_steps,
+                    last_obs=self.last_obs
+                )
+                
+                self.last_obs = extras['last_obs']
+                
+                # Put rollout in queue (non-blocking, drop if full)
+                try:
+                    self.rollout_queue.put(trajectories, block=False)
+                except queue.Full:
+                    # Queue is full, drop oldest and add new
+                    try:
+                        self.rollout_queue.get_nowait()
+                        self.rollout_queue.put(trajectories, block=False)
+                    except queue.Empty:
+                        pass
+                        
+            except Exception as e:
+                print(f"Error in rollout collection: {e}")
+                time.sleep(0.1)  # Brief pause on error
+    
+class MetricTracker:
+    """Unified metric collection and logging system"""
+    
+    def __init__(self, logger=None):
+        self.logger = logger
+        self.reset()
+    
+    def reset(self):
+        """Reset epoch-level metrics"""
+        self.step_metrics = []
+    
+    def add_step_metrics(self, metrics_dict):
+        """Add metrics from a single training step"""
+        self.step_metrics.append({k: v.detach() if hasattr(v, 'detach') else v 
+                                 for k, v in metrics_dict.items()})
+    
+    def compute_epoch_means(self):
+        """Compute mean of all step metrics for the epoch"""
+        if not self.step_metrics:
+            return {}
+        
+        epoch_metrics = {}
+        for key in self.step_metrics[0].keys():
+            values = [m[key] for m in self.step_metrics]
+            epoch_metrics[key] = torch.stack(values).mean() if hasattr(values[0], 'dim') else np.mean(values)
+        
+        return epoch_metrics
+    
+    def log_metrics(self, metrics_dict, prefix="", prog_bar=False):
+        """Log metrics with optional prefix"""
+        if not self.logger:
+            return
+            
+        formatted_metrics = {}
+        for key, value in metrics_dict.items():
+            if value is not None:
+                full_key = f"{prefix}/{key}" if prefix else key
+                formatted_metrics[full_key] = value
+        
+        if formatted_metrics:
+            self.logger.log_dict(formatted_metrics, prog_bar=prog_bar)
+    
+    def log_single(self, key, value, prog_bar=False):
+        """Log a single metric"""
+        if self.logger and value is not None:
+            self.logger.log(key, value, prog_bar=prog_bar)
