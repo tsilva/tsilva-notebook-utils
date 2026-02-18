@@ -658,7 +658,6 @@ def group_trajectories_by_episode(trajectories):
 
 
 
-# TODO: should dataloader move to gpu?
 class RolloutDataset(TorchDataset):
     """Holds PPO roll-out tensors and lets them be swapped in-place."""
     def __init__(self):
@@ -805,7 +804,6 @@ class AsyncRolloutCollector(BaseRolloutCollector):
         """Check if ready for initial rollout collection"""
         return self.policy_state_dict is not None and self.value_state_dict is not None
     
-    # TODO: models must be provided externally
     def _init_models(self):
         """Initialize models in the worker thread"""
         if self.env is None:

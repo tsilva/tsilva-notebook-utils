@@ -8,7 +8,6 @@ def get_default_device():
     elif torch.cuda.is_available(): return torch.device("cuda")
     else: return torch.device("cpu")
 
-# TODO: deprecate this function in favor of get_default_device()
 def get_current_device():
     import torch
 
