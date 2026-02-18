@@ -1,3 +1,9 @@
+> [!WARNING]
+> ## Archived
+> This project is archived and no longer maintained.
+>
+> Development has shifted to local Jupyter notebook workflows with in-repo utility imports and remote kernels when needed. No further updates or fixes are planned.
+
 <div align="center">
   <img src="logo.png" alt="tsilva-notebook-utils" width="512"/>
 
@@ -17,16 +23,16 @@ tsilva-notebook-utils provides a modular collection of utilities designed to str
 
 ## Features
 
-- **Reinforcement Learning** - Episode recording, rollout collectors (sync/async), GAE computation, and PyTorch Lightning callbacks for RL training
-- **PyTorch Lightning** - Callbacks for threshold-based stopping, backbone warmup, epoch timing, and W&B cleanup
-- **Data Modules** - Ready-to-use MNIST and CIFAR10 data modules with configurable augmentation pipelines
-- **Visualization** - Interactive embedding plots (t-SNE, UMAP, PCA) with Bokeh, heatmaps, and matplotlib utilities
-- **Video Rendering** - Create videos from frame sequences with labels, grid layouts, and model prediction comparisons
-- **PyTorch Utilities** - Device detection (CUDA/MPS/CPU), GPU stats, weight initialization, gradient norms, and filter visualization
-- **Google Colab** - Auto-disconnect after idle timeout, secrets management, and notebook ID extraction
-- **Integrations** - HuggingFace Hub, Weights & Biases, and OpenRouter API support
+- **Reinforcement Learning** — Episode recording, rollout collectors (sync/async), GAE computation, and PyTorch Lightning callbacks for RL training
+- **PyTorch Lightning** — Callbacks for threshold-based stopping, backbone warmup, epoch timing, and W&B cleanup
+- **Data Modules** — Ready-to-use MNIST and CIFAR10 data modules with configurable augmentation pipelines
+- **Visualization** — Interactive embedding plots (t-SNE, UMAP, PCA) with Bokeh, heatmaps, and matplotlib utilities
+- **Video Rendering** — Create videos from frame sequences with labels, grid layouts, and model prediction comparisons
+- **PyTorch Utilities** — Device detection (CUDA/MPS/CPU), GPU stats, weight initialization, gradient norms, and filter visualization
+- **Google Colab** — Auto-disconnect after idle timeout, secrets management, and notebook ID extraction
+- **Integrations** — HuggingFace Hub, Weights & Biases, and OpenRouter API support
 
-## Quick Start
+## 🚀 Quick Start
 
 ```bash
 pip install tsilva-notebook-utils
@@ -39,7 +45,7 @@ from tsilva_notebook_utils.lightning import ThresholdStoppingCallback
 from tsilva_notebook_utils.video import create_video_from_frames
 ```
 
-## Installation
+## 📦 Installation
 
 Install the base package or with specific feature groups:
 
@@ -58,7 +64,7 @@ pip install tsilva-notebook-utils[colab]       # Google Colab utilities
 pip install tsilva-notebook-utils[all]
 ```
 
-## Usage
+## 📖 Usage
 
 ### Reinforcement Learning
 
@@ -210,7 +216,7 @@ disconnect_after_timeout(timeout_seconds=300)
 load_secrets_into_env(["API_KEY", "HF_TOKEN"])
 ```
 
-## Development
+## 🛠️ Development
 
 ```bash
 # Clone and install in development mode
@@ -233,7 +239,7 @@ make bump-minor    # 0.x.y -> 0.x+1.0
 make bump-major    # x.y.z -> x+1.0.0
 ```
 
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
