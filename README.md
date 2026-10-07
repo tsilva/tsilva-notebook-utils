@@ -1,21 +1,22 @@
-> [!WARNING]
-> ## Archived
-> This project is archived and no longer maintained.
->
-> Development has shifted to local Jupyter notebook workflows with in-repo utility imports and remote kernels when needed. No further updates or fixes are planned.
-
-<div align="center">
+<p align="center">
   <img src="logo.png" alt="tsilva-notebook-utils" width="512"/>
+  <br />
+  <!-- repo-tagline:start -->
+  <strong>📓 Jupyter and Colab utilities for RL, PyTorch, and visualization 🚀</strong>
+  <!-- repo-tagline:end -->
+</p>
 
-  [![Tests](https://github.com/tsilva/tsilva-notebook-utils/actions/workflows/tests.yml/badge.svg)](https://github.com/tsilva/tsilva-notebook-utils/actions/workflows/tests.yml)
+[![Tests](https://github.com/tsilva/tsilva-notebook-utils/actions/workflows/tests.yml/badge.svg)](https://github.com/tsilva/tsilva-notebook-utils/actions/workflows/tests.yml)
   [![codecov](https://codecov.io/gh/tsilva/tsilva-notebook-utils/branch/main/graph/badge.svg)](https://codecov.io/gh/tsilva/tsilva-notebook-utils)
   [![PyPI version](https://badge.fury.io/py/tsilva-notebook-utils.svg)](https://badge.fury.io/py/tsilva-notebook-utils)
   [![Python Versions](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/tsilva/tsilva-notebook-utils)
   [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-  **📓 A comprehensive toolkit for Jupyter notebooks and Google Colab with utilities for RL, PyTorch Lightning, visualization, and video rendering 🚀**
-
-</div>
+> [!WARNING]
+> ## Archived
+> This project is archived and no longer maintained.
+>
+> Development has shifted to local Jupyter notebook workflows with in-repo utility imports and remote kernels when needed. No further updates or fixes are planned.
 
 ## Overview
 
